@@ -1,6 +1,6 @@
-# 80 Marketing OS
+# 80 AI OS
 
-AI Operating System for 80T-Shirt & Sticker2Day
+Build the smartest AI-powered operating system for 80T-Shirt & Sticker2Day.
 
 ## Vision
 
