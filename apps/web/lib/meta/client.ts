@@ -1,3 +1,5 @@
+import { getMetaGraphApiVersion } from "@/lib/meta/config";
+
 type MetaApiError = {
   error?: {
     message?: string;
@@ -43,7 +45,7 @@ export function getMetaUserAccessToken(): string {
 }
 
 export function getMetaGraphVersion(): string {
-  return process.env.META_GRAPH_VERSION || "v25.0";
+  return getMetaGraphApiVersion();
 }
 
 async function parseMetaResponse<T>(

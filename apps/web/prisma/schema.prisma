@@ -14,12 +14,21 @@ model AdAccount {
   timezone String  @default("Asia/Bangkok")
   isActive Boolean @default(true)
 
+  metaConnectionId String?
+  metaConnection   MetaConnection? @relation(fields: [metaConnectionId], references: [id], onDelete: SetNull)
+  businessId       String?
+  accountStatus    Int?
+
   pages          ManagedPage[]
+  pageMappings   MetaPageAdAccountMapping[]
   campaignDrafts CampaignDraft[]
   audienceAssets AudienceAsset[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([metaConnectionId])
+  @@index([businessId])
 }
 
 model ManagedPage {
@@ -32,19 +41,154 @@ model ManagedPage {
   adAccountId String?
   adAccount   AdAccount? @relation(fields: [adAccountId], references: [id], onDelete: SetNull)
 
+  metaConnectionId String?
+  metaConnection   MetaConnection? @relation(fields: [metaConnectionId], references: [id], onDelete: SetNull)
+
+  accessTokenCiphertext String?
+  accessTokenIv         String?
+  accessTokenAuthTag    String?
+  tokenExpiresAt        DateTime?
+  tasksJson             String    @default("[]")
+
   forecastDailyBudgetSatang Int @default(0)
 
-  contents        PageContent[]
-  productPolicies PageProductPolicy[]
-  campaignDrafts  CampaignDraft[]
-  creativeAssets  CreativeAsset[]
-  audienceAssets  AudienceAsset[]
+  adAccountMappings MetaPageAdAccountMapping[]
+  contents          PageContent[]
+  productPolicies   PageProductPolicy[]
+  campaignDrafts    CampaignDraft[]
+  creativeAssets    CreativeAsset[]
+  audienceAssets    AudienceAsset[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([adAccountId])
+  @@index([metaConnectionId])
   @@index([isActive])
+}
+
+/**
+ * =========================================================
+ * Meta Integration Platform
+ * Phase 1 / Module 2: Connection persistence
+ * =========================================================
+ */
+
+model MetaConnection {
+  id String @id @default(cuid())
+
+  providerUserId String  @unique
+  displayName    String?
+  email          String?
+  status         String  @default("ACTIVE")
+
+  userAccessTokenCiphertext String?
+  userAccessTokenIv         String?
+  userAccessTokenAuthTag    String?
+  tokenExpiresAt            DateTime?
+
+  grantedScopesJson  String @default("[]")
+  declinedScopesJson String @default("[]")
+  expiredScopesJson  String @default("[]")
+
+  lastValidatedAt  DateTime?
+  connectedAt      DateTime  @default(now())
+  disconnectedAt   DateTime?
+  lastErrorCode    String?
+  lastErrorMessage String?
+
+  pages            ManagedPage[]
+  adAccounts       AdAccount[]
+  pageMappings     MetaPageAdAccountMapping[]
+  permissionAudits MetaPermissionAudit[]
+  syncRuns         MetaSyncRun[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([tokenExpiresAt])
+  @@index([lastValidatedAt])
+}
+
+model MetaPageAdAccountMapping {
+  id String @id @default(cuid())
+
+  metaConnectionId String
+  metaConnection   MetaConnection @relation(fields: [metaConnectionId], references: [id], onDelete: Cascade)
+
+  pageId String
+  page   ManagedPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  adAccountId String
+  adAccount   AdAccount @relation(fields: [adAccountId], references: [id], onDelete: Cascade)
+
+  isPrimary  Boolean   @default(false)
+  status     String    @default("ACTIVE")
+  source     String    @default("META_SYNC")
+  verifiedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([metaConnectionId, pageId, adAccountId])
+  @@index([pageId])
+  @@index([adAccountId])
+  @@index([status])
+}
+
+model MetaPermissionAudit {
+  id String @id @default(cuid())
+
+  metaConnectionId String
+  metaConnection   MetaConnection @relation(fields: [metaConnectionId], references: [id], onDelete: Cascade)
+
+  requestedScopesJson String @default("[]")
+  grantedScopesJson   String @default("[]")
+  declinedScopesJson  String @default("[]")
+  expiredScopesJson   String @default("[]")
+
+  status       String   @default("PENDING")
+  source       String   @default("OAUTH")
+  errorMessage String?
+  checkedAt    DateTime @default(now())
+
+  createdAt DateTime @default(now())
+
+  @@index([metaConnectionId])
+  @@index([status])
+  @@index([checkedAt])
+}
+
+model MetaSyncRun {
+  id String @id @default(cuid())
+
+  metaConnectionId String
+  metaConnection   MetaConnection @relation(fields: [metaConnectionId], references: [id], onDelete: Cascade)
+
+  resourceType String
+  status       String @default("PENDING")
+  trigger      String @default("MANUAL")
+
+  cursor       String?
+  itemsFound   Int     @default(0)
+  itemsCreated Int     @default(0)
+  itemsUpdated Int     @default(0)
+  itemsSkipped Int     @default(0)
+  itemsFailed  Int     @default(0)
+
+  errorCode    String?
+  errorMessage String?
+  metadataJson String  @default("{}")
+
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([metaConnectionId])
+  @@index([resourceType, status])
+  @@index([createdAt])
 }
 
 model PageProductPolicy {

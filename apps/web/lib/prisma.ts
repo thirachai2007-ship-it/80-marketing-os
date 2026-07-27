@@ -3,10 +3,10 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/lib/generated/prisma/client";
 
 const PRISMA_CLIENT_VERSION =
-  "postgres-audience-library-v1";
+  "postgres-meta-integration-v1";
 
 type GlobalPrismaStore = {
-  prismaPostgresAudienceLibraryV1?: PrismaClient;
+  prismaPostgresMetaIntegrationV1?: PrismaClient;
 };
 
 const globalForPrisma =
@@ -48,6 +48,10 @@ const createPrismaClient =
         audienceSource?: unknown;
         audienceUsage?: unknown;
         audiencePerformance?: unknown;
+        metaConnection?: unknown;
+        metaPageAdAccountMapping?: unknown;
+        metaPermissionAudit?: unknown;
+        metaSyncRun?: unknown;
       };
 
     if (
@@ -55,11 +59,15 @@ const createPrismaClient =
       !runtimeClient.audienceVersion ||
       !runtimeClient.audienceSource ||
       !runtimeClient.audienceUsage ||
-      !runtimeClient.audiencePerformance
+      !runtimeClient.audiencePerformance ||
+      !runtimeClient.metaConnection ||
+      !runtimeClient.metaPageAdAccountMapping ||
+      !runtimeClient.metaPermissionAudit ||
+      !runtimeClient.metaSyncRun
     ) {
       throw new Error(
         [
-          `Prisma Client ${PRISMA_CLIENT_VERSION} ไม่มี Audience Models`,
+          `Prisma Client ${PRISMA_CLIENT_VERSION} ไม่มี Meta Integration Models`,
           "กรุณารัน npx prisma generate",
           "ลบโฟลเดอร์ .next",
           "แล้วรีสตาร์ต npm run dev",
@@ -72,7 +80,7 @@ const createPrismaClient =
 
 const prisma =
   globalForPrisma
-    .prismaPostgresAudienceLibraryV1 ??
+    .prismaPostgresMetaIntegrationV1 ??
   createPrismaClient();
 
 if (
@@ -80,7 +88,7 @@ if (
   "production"
 ) {
   globalForPrisma
-    .prismaPostgresAudienceLibraryV1 =
+    .prismaPostgresMetaIntegrationV1 =
     prisma;
 }
 
