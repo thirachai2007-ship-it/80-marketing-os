@@ -1,0 +1,748 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model AdAccount {
+  id       String  @id
+  name     String
+  currency String  @default("THB")
+  timezone String  @default("Asia/Bangkok")
+  isActive Boolean @default(true)
+
+  pages          ManagedPage[]
+  campaignDrafts CampaignDraft[]
+  audienceAssets AudienceAsset[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ManagedPage {
+  id         String  @id
+  name       String
+  category   String?
+  pictureUrl String?
+  isActive   Boolean @default(true)
+
+  adAccountId String?
+  adAccount   AdAccount? @relation(fields: [adAccountId], references: [id], onDelete: SetNull)
+
+  forecastDailyBudgetSatang Int @default(0)
+
+  contents        PageContent[]
+  productPolicies PageProductPolicy[]
+  campaignDrafts  CampaignDraft[]
+  creativeAssets  CreativeAsset[]
+  audienceAssets  AudienceAsset[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([adAccountId])
+  @@index([isActive])
+}
+
+model PageProductPolicy {
+  id String @id @default(cuid())
+
+  pageId String
+  page   ManagedPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  productCategory   String
+  allocationPercent Int
+
+  minimumScore Int @default(80)
+  minimumAds   Int @default(3)
+  maximumAds   Int @default(3)
+
+  allowExistingPost    Boolean @default(true)
+  allowDarkPost        Boolean @default(true)
+  useOldWinningContent Boolean @default(true)
+  isEnabled            Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([pageId, productCategory])
+  @@index([productCategory])
+  @@index([isEnabled])
+}
+
+model PageContent {
+  id String @id
+
+  pageId String
+  page   ManagedPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  pageName     String
+  message      String    @default("")
+  createdTime  DateTime?
+  permalinkUrl String?
+  thumbnailUrl String?
+  mediaUrl     String?
+  mediaType    String
+
+  postId        String
+  objectStoryId String
+
+  fingerprint String? @unique
+  messageHash String?
+  imageHash   String?
+  videoHash   String?
+
+  isDuplicate Boolean @default(false)
+
+  productCategory   String  @default("UNKNOWN")
+  productConfidence Int?
+  productEvidence   String?
+
+  contentFingerprint   String?
+  fingerprintVersion   Int       @default(1)
+  fingerprintUpdatedAt DateTime?
+
+  analysisStatus String    @default("PENDING")
+  analysisError  String?
+  analyzedAt     DateTime?
+
+  campaignStatus String @default("NOT_READY")
+
+  isOldContent      Boolean @default(false)
+  wasPreviouslyUsed Boolean @default(false)
+  previousWinner    Boolean @default(false)
+  previousMetaAdId  String?
+
+  analysis           ContentAnalysis?
+  draftAds           CampaignDraftAd[]
+  analysisQueueItems AnalysisQueueItem[]
+  creativeAssets     CreativeAsset[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([pageId])
+  @@index([pageId, productCategory])
+  @@index([analysisStatus])
+  @@index([campaignStatus])
+  @@index([previousWinner])
+  @@index([createdTime])
+  @@index([contentFingerprint])
+  @@index([fingerprintUpdatedAt])
+}
+
+model ContentAnalysis {
+  id String @id @default(cuid())
+
+  contentId String      @unique
+  content   PageContent @relation(fields: [contentId], references: [id], onDelete: Cascade)
+
+  modelName       String?
+  promptVersion   String?
+  analysisVersion Int     @default(1)
+
+  totalScore             Int
+  visualScore            Int
+  copyScore              Int
+  hookScore              Int
+  visualClarityScore     Int
+  productVisibilityScore Int
+  offerClarityScore      Int
+  textReadabilityScore   Int
+  salesPotentialScore    Int
+  audienceFitScore       Int
+
+  recommendation String
+  confidence     String
+  summary        String
+
+  reasonsJson    String @default("[]")
+  weaknessesJson String @default("[]")
+
+  useExistingPost  Boolean @default(false)
+  darkPostEligible Boolean @default(false)
+  darkPostReason   String?
+
+  suggestedObjective String?
+
+  audiencePlan   AudiencePlan?
+  darkPostCopies DarkPostCopy[]
+  creativeAssets CreativeAsset[]
+
+  rawAnalysisJson String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([totalScore])
+  @@index([recommendation])
+  @@index([darkPostEligible])
+}
+
+model AudiencePlan {
+  id String @id @default(cuid())
+
+  analysisId String          @unique
+  analysis   ContentAnalysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+
+  strategy   String
+  confidence Int
+
+  gender String
+  ageMin Int
+  ageMax Int
+
+  provincesJson         String @default("[]")
+  businessTypesJson     String @default("[]")
+  interestsJson         String @default("[]")
+  behaviorsJson         String @default("[]")
+  excludedAudiencesJson String @default("[]")
+
+  rationale String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model DarkPostCopy {
+  id String @id @default(cuid())
+
+  analysisId String
+  analysis   ContentAnalysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+
+  angle        String
+  angleName    String
+  primaryText  String
+  headline     String
+  description  String?
+  callToAction String
+  version      Int     @default(1)
+
+  isSelected Boolean @default(false)
+  isUsed     Boolean @default(false)
+
+  draftAds CampaignDraftAd[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([analysisId])
+  @@index([angle])
+  @@index([isSelected])
+}
+
+model CampaignDraft {
+  id String @id @default(cuid())
+
+  pageId String
+  page   ManagedPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  adAccountId String
+  adAccount   AdAccount @relation(fields: [adAccountId], references: [id], onDelete: Cascade)
+
+  productCategory String
+
+  campaignName String
+  adSetName    String
+  objective    String
+
+  forecastDailyBudgetSatang   Int
+  forecastLearningSpendSatang Int?
+  forecastLifeCycleDays       Int?
+
+  timezone       String @default("Asia/Bangkok")
+  scheduleStart  String @default("08:45")
+  scheduleEnd    String @default("18:00")
+  activeDaysJson String @default("[1,2,3,4,5,6]")
+
+  status String @default("PLANNING")
+
+  metaCampaignId String?
+  metaAdSetId    String?
+  failureReason  String?
+
+  ads            CampaignDraftAd[]
+  decisions      DecisionLog[]
+  audienceUsages AudienceUsage[]
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  createdInMetaAt DateTime?
+
+  @@index([pageId])
+  @@index([adAccountId])
+  @@index([pageId, productCategory])
+  @@index([status])
+}
+
+model CampaignDraftAd {
+  id String @id @default(cuid())
+
+  campaignDraftId String
+  campaignDraft   CampaignDraft @relation(fields: [campaignDraftId], references: [id], onDelete: Cascade)
+
+  contentId String?
+  content   PageContent? @relation(fields: [contentId], references: [id], onDelete: SetNull)
+
+  darkPostCopyId String?
+  darkPostCopy   DarkPostCopy? @relation(fields: [darkPostCopyId], references: [id], onDelete: SetNull)
+
+  creativeRevisionId String?
+  creativeRevision   CreativeRevision? @relation(fields: [creativeRevisionId], references: [id], onDelete: SetNull)
+
+  adNumber     Int
+  creativeMode String
+  adName       String
+
+  primaryText  String?
+  headline     String?
+  description  String?
+  callToAction String?
+
+  metaCreativeId String?
+  metaAdId       String?
+
+  status String @default("PLANNED")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([campaignDraftId, adNumber])
+  @@index([contentId])
+  @@index([darkPostCopyId])
+  @@index([creativeRevisionId])
+  @@index([status])
+}
+
+model DecisionLog {
+  id String @id @default(cuid())
+
+  campaignDraftId String?
+  campaignDraft   CampaignDraft? @relation(fields: [campaignDraftId], references: [id], onDelete: SetNull)
+
+  contentId String?
+
+  decisionType String
+  action       String
+  reason       String
+  confidence   Int?
+
+  inputJson  String?
+  outputJson String?
+  policyJson String?
+
+  policyReference String?
+
+  createdAt DateTime @default(now())
+
+  @@index([campaignDraftId])
+  @@index([contentId])
+  @@index([decisionType])
+  @@index([createdAt])
+}
+
+model BusinessHoliday {
+  id String @id @default(cuid())
+
+  date DateTime @unique
+  name String
+
+  isFullDay Boolean @default(true)
+  openTime  String?
+  closeTime String?
+  isActive  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([date])
+  @@index([isActive])
+}
+
+model MediaBuyerRun {
+  id String @id @default(cuid())
+
+  runType String
+  status  String @default("RUNNING")
+
+  pagesChecked     Int @default(0)
+  postsFound       Int @default(0)
+  postsCreated     Int @default(0)
+  postsAnalyzed    Int @default(0)
+  postsFailed      Int @default(0)
+  campaignsPlanned Int @default(0)
+  campaignsCreated Int @default(0)
+
+  errorMessage String?
+  summaryJson  String?
+
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  @@index([runType])
+  @@index([status])
+  @@index([startedAt])
+}
+
+model AnalysisQueueItem {
+  id String @id @default(cuid())
+
+  contentId String
+  content   PageContent @relation(fields: [contentId], references: [id], onDelete: Cascade)
+
+  contentFingerprint String
+  fingerprintVersion Int
+
+  status String @default("READY")
+  reason String
+
+  priority Int @default(50)
+
+  attempts    Int @default(0)
+  maxAttempts Int @default(3)
+
+  lockedBy String?
+  lockedAt DateTime?
+
+  errorMessage String?
+
+  queuedAt    DateTime  @default(now())
+  startedAt   DateTime?
+  completedAt DateTime?
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([contentId, contentFingerprint])
+  @@index([status, priority])
+  @@index([contentId])
+  @@index([queuedAt])
+  @@index([lockedAt])
+}
+
+model CreativeAsset {
+  id String @id @default(cuid())
+
+  pageId String
+  page   ManagedPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  sourceContentId String?
+  sourceContent   PageContent? @relation(fields: [sourceContentId], references: [id], onDelete: SetNull)
+
+  sourceAnalysisId String?
+  sourceAnalysis   ContentAnalysis? @relation(fields: [sourceAnalysisId], references: [id], onDelete: SetNull)
+
+  name            String
+  assetType       String
+  sourceMode      String @default("OPTIMIZED_EXISTING")
+  productCategory String
+  mediaType       String
+
+  originalMediaUrl     String?
+  originalThumbnailUrl String?
+  originalMessage      String?
+
+  status         String @default("PLANNING")
+  approvalStatus String @default("NOT_SUBMITTED")
+
+  optimizationReason String?
+  targetAudienceJson String  @default("{}")
+  metadataJson       String  @default("{}")
+
+  currentVersion Int     @default(0)
+  isActive       Boolean @default(true)
+
+  revisions CreativeRevision[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([pageId])
+  @@index([sourceContentId])
+  @@index([sourceAnalysisId])
+  @@index([productCategory])
+  @@index([assetType])
+  @@index([status])
+  @@index([approvalStatus])
+  @@index([isActive])
+  @@index([createdAt])
+}
+
+model CreativeRevision {
+  id String @id @default(cuid())
+
+  creativeAssetId String
+  creativeAsset   CreativeAsset @relation(fields: [creativeAssetId], references: [id], onDelete: Cascade)
+
+  version Int
+
+  revisionType String
+  status       String @default("PLANNING")
+
+  providerName  String?
+  providerModel String?
+
+  generationPrompt String?
+  editInstructions String?
+  changeSummary    String?
+  aiReason         String?
+
+  primaryText  String?
+  headline     String?
+  description  String?
+  callToAction String?
+
+  mediaUrl     String?
+  thumbnailUrl String?
+  mimeType     String?
+  width        Int?
+  height       Int?
+  durationMs   Int?
+  aspectRatio  String?
+
+  sourceFingerprint String?
+  outputFingerprint String?
+
+  targetAudienceJson String @default("{}")
+  metadataJson       String @default("{}")
+
+  approvalStatus String    @default("NOT_SUBMITTED")
+  approvedAt     DateTime?
+  rejectedAt     DateTime?
+  ownerFeedback  String?
+
+  isSelected Boolean @default(false)
+  isUsed     Boolean @default(false)
+
+  draftAds CampaignDraftAd[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([creativeAssetId, version])
+  @@index([creativeAssetId])
+  @@index([revisionType])
+  @@index([status])
+  @@index([approvalStatus])
+  @@index([isSelected])
+  @@index([isUsed])
+  @@index([createdAt])
+}
+
+/**
+ * =========================================================
+ * Audience Asset Library v1
+ * Master Spec: 53-55, 70-72
+ * =========================================================
+ */
+
+model AudienceAsset {
+  id String @id @default(cuid())
+
+  adAccountId String
+  adAccount   AdAccount @relation(fields: [adAccountId], references: [id], onDelete: Cascade)
+
+  pageId String?
+  page   ManagedPage? @relation(fields: [pageId], references: [id], onDelete: SetNull)
+
+  name            String
+  audienceType    String
+  productCategory String?
+
+  metaAudienceId String?
+  sourceKey      String?
+
+  status         String @default("DRAFT")
+  approvalStatus String @default("NOT_SUBMITTED")
+  learningStatus String @default("NEW")
+
+  description    String?
+  countryCode    String  @default("TH")
+  retentionDays  Int?
+  lookalikeRatio Float?
+  estimatedSize  Int?
+
+  rulesJson    String @default("{}")
+  metadataJson String @default("{}")
+
+  isReusable Boolean @default(true)
+  isActive   Boolean @default(true)
+
+  versions     AudienceVersion[]
+  sources      AudienceSource[]      @relation("AudienceAssetSources")
+  sourceFor    AudienceSource[]      @relation("SourceAudienceAsset")
+  usages       AudienceUsage[]
+  performances AudiencePerformance[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([adAccountId, sourceKey])
+  @@index([adAccountId])
+  @@index([pageId])
+  @@index([audienceType])
+  @@index([productCategory])
+  @@index([metaAudienceId])
+  @@index([status])
+  @@index([approvalStatus])
+  @@index([learningStatus])
+  @@index([isActive])
+}
+
+model AudienceSource {
+  id String @id @default(cuid())
+
+  audienceAssetId String
+  audienceAsset   AudienceAsset @relation("AudienceAssetSources", fields: [audienceAssetId], references: [id], onDelete: Cascade)
+
+  sourceAudienceAssetId String?
+  sourceAudienceAsset   AudienceAsset? @relation("SourceAudienceAsset", fields: [sourceAudienceAssetId], references: [id], onDelete: SetNull)
+
+  sourceType        String
+  sourceReferenceId String?
+  sourceName        String?
+
+  retentionDays Int?
+  minimumValue  Int?
+  maximumValue  Int?
+
+  ruleJson     String @default("{}")
+  metadataJson String @default("{}")
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([audienceAssetId])
+  @@index([sourceAudienceAssetId])
+  @@index([sourceType])
+  @@index([sourceReferenceId])
+  @@index([isActive])
+}
+
+model AudienceVersion {
+  id String @id @default(cuid())
+
+  audienceAssetId String
+  audienceAsset   AudienceAsset @relation(fields: [audienceAssetId], references: [id], onDelete: Cascade)
+
+  version Int
+
+  strategyName String
+  changeReason String?
+
+  gender String?
+  ageMin Int?
+  ageMax Int?
+
+  provincesJson         String @default("[]")
+  businessTypesJson     String @default("[]")
+  interestsJson         String @default("[]")
+  behaviorsJson         String @default("[]")
+  excludedAudiencesJson String @default("[]")
+  placementsJson        String @default("[]")
+
+  rulesJson    String @default("{}")
+  metadataJson String @default("{}")
+
+  status         String @default("DRAFT")
+  approvalStatus String @default("NOT_SUBMITTED")
+
+  isSelected Boolean @default(false)
+  isUsed     Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([audienceAssetId, version])
+  @@index([audienceAssetId])
+  @@index([status])
+  @@index([approvalStatus])
+  @@index([isSelected])
+  @@index([isUsed])
+}
+
+model AudienceUsage {
+  id String @id @default(cuid())
+
+  audienceAssetId String
+  audienceAsset   AudienceAsset @relation(fields: [audienceAssetId], references: [id], onDelete: Cascade)
+
+  campaignDraftId String?
+  campaignDraft   CampaignDraft? @relation(fields: [campaignDraftId], references: [id], onDelete: SetNull)
+
+  metaCampaignId String?
+  metaAdSetId    String?
+
+  role              String
+  status            String @default("PLANNED")
+  allocationPercent Int?
+
+  budgetSatang Int?
+
+  startedAt DateTime?
+  endedAt   DateTime?
+
+  metadataJson String @default("{}")
+
+  performances AudiencePerformance[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([audienceAssetId])
+  @@index([campaignDraftId])
+  @@index([metaCampaignId])
+  @@index([metaAdSetId])
+  @@index([role])
+  @@index([status])
+}
+
+model AudiencePerformance {
+  id String @id @default(cuid())
+
+  audienceAssetId String
+  audienceAsset   AudienceAsset @relation(fields: [audienceAssetId], references: [id], onDelete: Cascade)
+
+  audienceUsageId String?
+  audienceUsage   AudienceUsage? @relation(fields: [audienceUsageId], references: [id], onDelete: SetNull)
+
+  dateStart DateTime
+  dateEnd   DateTime
+
+  impressions Int @default(0)
+  reach       Int @default(0)
+  clicks      Int @default(0)
+  messages    Int @default(0)
+  orders      Int @default(0)
+
+  spendSatang       Int @default(0)
+  revenueSatang     Int @default(0)
+  grossProfitSatang Int @default(0)
+  netProfitSatang   Int @default(0)
+
+  ctr                  Float?
+  cpmSatang            Int?
+  cpcSatang            Int?
+  cpaSatang            Int?
+  costPerMessageSatang Int?
+  roas                 Float?
+
+  frequency Float?
+
+  resultSource String @default("META")
+  metadataJson String @default("{}")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([audienceAssetId, audienceUsageId, dateStart, dateEnd])
+  @@index([audienceAssetId])
+  @@index([audienceUsageId])
+  @@index([dateStart])
+  @@index([dateEnd])
+  @@index([netProfitSatang])
+  @@index([roas])
+}
