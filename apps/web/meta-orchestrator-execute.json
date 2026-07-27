@@ -1,0 +1,20 @@
+{
+  "campaignDraftId": "cms1xm6cb005xioumponkuqvu",
+  "execute": true,
+  "ownerConfirmation": true,
+  "expectedApprovalFingerprint": "325b18ea0ce45bc1bd9e9dfe5f0031333bc9750d2cd9ade6337b475892c9bb06",
+  "expectedPayloadFingerprint": "03ba298e201e97843a33b76f399c9cf21862dd714cd450c334f8e3cad89e0b1c",
+  "expectedExecutionFingerprint": "09183fd3f41d05d202b39df175db73346391f4e91eecb120ea2d8646371d9477",
+  "destinationUrl": "https://m.me/80tshirt",
+  "targeting": {
+    "geo_locations": {
+      "countries": [
+        "TH"
+      ]
+    },
+    "age_min": 20,
+    "age_max": 65
+  },
+  "ownerName": "OWNER",
+  "note": "Execute Meta publish"
+}
