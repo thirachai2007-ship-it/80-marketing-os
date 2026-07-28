@@ -93,7 +93,6 @@ export function getMetaOAuthConfig(): MetaOAuthConfig {
         "public_profile",
         "pages_show_list",
         "pages_read_engagement",
-        "pages_read_user_content",
         "ads_read",
         "ads_management",
         "business_management",
