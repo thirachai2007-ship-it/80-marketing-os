@@ -14,6 +14,16 @@ type MetaAdAccount = {
   };
 };
 
+type MetaBusiness = {
+  id: string;
+  name?: string;
+};
+
+type MetaBusinessPage = {
+  id: string;
+  name?: string;
+};
+
 export async function syncMetaAdAccounts() {
   const connection = await getActiveMetaConnection();
   const run = await prisma.metaSyncRun.create({
@@ -94,6 +104,64 @@ export async function syncMetaAdAccounts() {
       }
     }
 
+    const businesses =
+      await metaRequestAll<MetaBusiness>(
+        "me/businesses",
+        {
+          fields: "id,name",
+          limit: "100",
+        },
+        {
+          accessToken: connection.accessToken,
+          maximumPages: 10,
+        },
+      );
+    const pageBusinessIds = new Map<string, string>();
+
+    for (const business of businesses) {
+      const [ownedPages, clientPages] =
+        await Promise.all([
+          metaRequestAll<MetaBusinessPage>(
+            `${business.id}/owned_pages`,
+            {
+              fields: "id,name",
+              limit: "100",
+            },
+            {
+              accessToken: connection.accessToken,
+              maximumPages: 10,
+            },
+          ),
+          metaRequestAll<MetaBusinessPage>(
+            `${business.id}/client_pages`,
+            {
+              fields: "id,name",
+              limit: "100",
+            },
+            {
+              accessToken: connection.accessToken,
+              maximumPages: 10,
+            },
+          ),
+        ]);
+
+      for (const page of [...ownedPages, ...clientPages]) {
+        pageBusinessIds.set(page.id, business.id);
+      }
+    }
+
+    for (const [pageId, businessId] of pageBusinessIds) {
+      await prisma.managedPage.updateMany({
+        where: {
+          id: pageId,
+          metaConnectionId: connection.id,
+        },
+        data: {
+          businessId,
+        },
+      });
+    }
+
     const [pages, syncedAccounts] = await Promise.all([
       prisma.managedPage.findMany({
         where: {
@@ -125,6 +193,16 @@ export async function syncMetaAdAccounts() {
       }),
     ]);
     let mappingsCreated = 0;
+
+    await prisma.metaPageAdAccountMapping.updateMany({
+      where: {
+        metaConnectionId: connection.id,
+        status: "ACTIVE",
+      },
+      data: {
+        status: "INACTIVE",
+      },
+    });
 
     for (const page of pages) {
       const matchingAccounts = syncedAccounts.filter(
@@ -187,6 +265,9 @@ export async function syncMetaAdAccounts() {
         itemsUpdated: updated,
         completedAt: new Date(),
         metadataJson: JSON.stringify({
+          businessesFound: businesses.length,
+          pagesMatchedToBusinesses:
+            pageBusinessIds.size,
           mappingsCreated,
           pagesWithBusinessId: pages.length,
         }),
@@ -198,6 +279,9 @@ export async function syncMetaAdAccounts() {
       accountsFound: accounts.length,
       accountsCreated: created,
       accountsUpdated: updated,
+      businessesFound: businesses.length,
+      pagesMatchedToBusinesses:
+        pageBusinessIds.size,
       mappingsCreated,
       pagesWithBusinessId: pages.length,
       accounts: accounts.map((account) => ({
