@@ -26,6 +26,7 @@ model AdAccount {
   metaCampaigns  MetaCampaign[]
   metaAdSets     MetaAdSet[]
   metaAds        MetaAd[]
+  metaInsights   MetaAdInsight[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -110,6 +111,7 @@ model MetaConnection {
   campaigns        MetaCampaign[]
   adSets           MetaAdSet[]
   ads              MetaAd[]
+  insights         MetaAdInsight[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -222,8 +224,9 @@ model MetaCampaign {
   metaCreatedTime          DateTime?
   metaUpdatedTime          DateTime?
 
-  adSets MetaAdSet[]
-  ads    MetaAd[]
+  adSets   MetaAdSet[]
+  ads      MetaAd[]
+  insights MetaAdInsight[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -263,7 +266,8 @@ model MetaAdSet {
   metaCreatedTime          DateTime?
   metaUpdatedTime          DateTime?
 
-  ads MetaAd[]
+  ads      MetaAd[]
+  insights MetaAdInsight[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -301,6 +305,8 @@ model MetaAd {
   metaCreatedTime        DateTime?
   metaUpdatedTime        DateTime?
 
+  insights MetaAdInsight[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -311,6 +317,59 @@ model MetaAd {
   @@index([effectiveStatus])
   @@index([objectStoryId])
   @@index([metaUpdatedTime])
+}
+
+model MetaAdInsight {
+  id String @id @default(cuid())
+
+  metaConnectionId String
+  metaConnection   MetaConnection @relation(fields: [metaConnectionId], references: [id], onDelete: Cascade)
+
+  adAccountId String
+  adAccount   AdAccount @relation(fields: [adAccountId], references: [id], onDelete: Cascade)
+
+  campaignId String
+  campaign   MetaCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  adSetId String
+  adSet   MetaAdSet @relation(fields: [adSetId], references: [id], onDelete: Cascade)
+
+  adId String
+  ad   MetaAd @relation(fields: [adId], references: [id], onDelete: Cascade)
+
+  dateStart DateTime
+  dateStop  DateTime
+
+  impressions      Int @default(0)
+  reach            Int @default(0)
+  clicks           Int @default(0)
+  inlineLinkClicks Int @default(0)
+
+  spendSatang Int    @default(0)
+  frequency   Float?
+  ctr         Float?
+  cpcSatang   Int?
+  cpmSatang   Int?
+  cppSatang   Int?
+
+  leads                         Int @default(0)
+  messagingConversationsStarted Int @default(0)
+  purchases                     Int @default(0)
+
+  actionsJson           String @default("[]")
+  costPerActionTypeJson String @default("[]")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([adId, dateStart, dateStop])
+  @@index([metaConnectionId])
+  @@index([adAccountId])
+  @@index([campaignId])
+  @@index([adSetId])
+  @@index([dateStart])
+  @@index([dateStop])
+  @@index([spendSatang])
 }
 
 model PageProductPolicy {
