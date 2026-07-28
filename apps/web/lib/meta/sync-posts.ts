@@ -3,7 +3,10 @@ import {
   getActiveMetaPagesWithTokens,
   type ActiveMetaPageToken,
 } from "@/lib/meta/connection-token";
-import { metaRequestAll } from "@/lib/meta/client";
+import {
+  metaRequest,
+  type MetaPagingResponse,
+} from "@/lib/meta/client";
 import prisma from "@/lib/prisma";
 
 type MetaAttachment = {
@@ -42,6 +45,8 @@ type PageSyncResult = {
   found: number;
   created: number;
   updated: number;
+  nextCursor: string | null;
+  hasNext: boolean;
 };
 
 function detectMediaType(
@@ -126,25 +131,35 @@ function parseCreatedTime(
 
 async function syncPagePosts(
   page: ActiveMetaPageToken,
+  after?: string,
 ): Promise<PageSyncResult> {
-  const posts = await metaRequestAll<MetaPost>(
+  const params: Record<string, string> = {
+    fields: [
+      "id",
+      "message",
+      "created_time",
+      "permalink_url",
+      "full_picture",
+      "attachments{media_type,type,url,target,media,subattachments}",
+    ].join(","),
+    limit: "50",
+  };
+
+  if (after) {
+    params.after = after;
+  }
+
+  const response =
+    await metaRequest<
+      MetaPagingResponse<MetaPost>
+    >(
     `${page.id}/posts`,
-    {
-      fields: [
-        "id",
-        "message",
-        "created_time",
-        "permalink_url",
-        "full_picture",
-        "attachments{media_type,type,url,target,media,subattachments}",
-      ].join(","),
-      limit: "100",
-    },
+    params,
     {
       accessToken: page.accessToken,
-      maximumPages: 3,
     },
   );
+  const posts = response.data || [];
   const existingPosts =
     await prisma.pageContent.findMany({
       where: {
@@ -215,10 +230,20 @@ async function syncPagePosts(
     found: posts.length,
     created: posts.length - updated,
     updated,
+    nextCursor:
+      response.paging?.cursors?.after ||
+      null,
+    hasNext: Boolean(response.paging?.next),
   };
 }
 
-export async function syncMetaPosts() {
+export async function syncMetaPosts({
+  pageId,
+  after,
+}: {
+  pageId: string;
+  after?: string;
+}) {
   const connection =
     await getActiveMetaConnection();
   const run = await prisma.metaSyncRun.create({
@@ -227,6 +252,7 @@ export async function syncMetaPosts() {
       resourceType: "POSTS",
       status: "RUNNING",
       trigger: "MANUAL",
+      cursor: after || null,
       startedAt: new Date(),
     },
   });
@@ -237,114 +263,50 @@ export async function syncMetaPosts() {
         connection.id,
       );
 
-    if (pages.length === 0) {
+    const page = pages.find(
+      (item) => item.id === pageId,
+    );
+
+    if (!page) {
       throw new Error(
-        "ไม่พบเพจที่มี Page Access Token กรุณา Sync Pages ก่อน",
+        "ไม่พบเพจที่เลือก หรือเพจไม่มี Page Access Token",
       );
     }
 
-    const results: PromiseSettledResult<PageSyncResult>[] =
-      [];
-
-    for (
-      let start = 0;
-      start < pages.length;
-      start += 2
-    ) {
-      const pageBatch = pages.slice(
-        start,
-        start + 2,
-      );
-
-      results.push(
-        ...(await Promise.allSettled(
-          pageBatch.map((page) =>
-            syncPagePosts(page),
-          ),
-        )),
-      );
-    }
-    const syncedPages: PageSyncResult[] = [];
-    const failedPages: {
-      pageId: string;
-      pageName: string;
-      error: string;
-    }[] = [];
-
-    results.forEach((result, index) => {
-      const page = pages[index];
-
-      if (result.status === "fulfilled") {
-        syncedPages.push(result.value);
-        return;
-      }
-
-      failedPages.push({
-        pageId: page.id,
-        pageName: page.name,
-        error:
-          result.reason instanceof Error
-            ? result.reason.message
-            : "ไม่สามารถ Sync โพสต์ได้",
-      });
-    });
-
-    const postsFound = syncedPages.reduce(
-      (sum, page) => sum + page.found,
-      0,
+    const result = await syncPagePosts(
+      page,
+      after,
     );
-    const postsCreated = syncedPages.reduce(
-      (sum, page) => sum + page.created,
-      0,
-    );
-    const postsUpdated = syncedPages.reduce(
-      (sum, page) => sum + page.updated,
-      0,
-    );
-    const status =
-      failedPages.length === 0
-        ? "COMPLETED"
-        : syncedPages.length > 0
-          ? "PARTIAL"
-          : "FAILED";
 
     await prisma.metaSyncRun.update({
       where: {
         id: run.id,
       },
       data: {
-        status,
-        itemsFound: postsFound,
-        itemsCreated: postsCreated,
-        itemsUpdated: postsUpdated,
-        itemsFailed: failedPages.length,
-        errorCode:
-          failedPages.length > 0
-            ? "META_POST_SYNC_PARTIAL"
-            : null,
-        errorMessage:
-          failedPages.length > 0
-            ? `${failedPages.length} page(s) failed`
-            : null,
+        status: "COMPLETED",
+        cursor: result.nextCursor,
+        itemsFound: result.found,
+        itemsCreated: result.created,
+        itemsUpdated: result.updated,
         completedAt: new Date(),
         metadataJson: JSON.stringify({
-          pagesRequested: pages.length,
-          pagesSynced: syncedPages.length,
-          failedPages,
+          pageId: page.id,
+          pageName: page.name,
+          hasNext: result.hasNext,
         }),
       },
     });
 
     return {
-      ok: failedPages.length === 0,
-      status,
-      pagesRequested: pages.length,
-      pagesSynced: syncedPages.length,
-      postsFound,
-      postsCreated,
-      postsUpdated,
-      failedPages,
-      pages: syncedPages,
+      ok: true,
+      status: "COMPLETED",
+      pageId: result.pageId,
+      pageName: result.pageName,
+      postsFound: result.found,
+      postsCreated: result.created,
+      postsUpdated: result.updated,
+      nextCursor: result.nextCursor,
+      hasNext: result.hasNext,
     };
   } catch (error) {
     const message =
