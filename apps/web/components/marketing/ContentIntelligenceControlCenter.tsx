@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   useCallback,
   useEffect,
@@ -7,6 +8,7 @@ import {
 } from "react";
 import {
   Activity,
+  ArrowRight,
   BrainCircuit,
   CheckCircle2,
   CirclePause,
@@ -330,20 +332,29 @@ export default function ContentIntelligenceControlCenter() {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => void load()}
-          disabled={loading || working}
-          className="inline-flex h-11 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-teal-300 hover:text-teal-700 disabled:opacity-50"
-        >
-          <RefreshCcw
-            size={15}
-            className={
-              loading ? "animate-spin" : ""
-            }
-          />
-          รีเฟรชสถานะ
-        </button>
+        <div className="flex flex-wrap gap-3">
+          <Link
+            href="/marketing/content-intelligence/results"
+            className="inline-flex h-11 items-center gap-2 rounded-2xl bg-slate-900 px-4 text-xs font-semibold text-white shadow-sm"
+          >
+            ดูผลวิเคราะห์ทั้งหมด
+            <ArrowRight size={15} />
+          </Link>
+          <button
+            type="button"
+            onClick={() => void load()}
+            disabled={loading || working}
+            className="inline-flex h-11 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-teal-300 hover:text-teal-700 disabled:opacity-50"
+          >
+            <RefreshCcw
+              size={15}
+              className={
+                loading ? "animate-spin" : ""
+              }
+            />
+            รีเฟรชสถานะ
+          </button>
+        </div>
       </div>
 
       {error && (
