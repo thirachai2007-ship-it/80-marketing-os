@@ -1,4 +1,5 @@
 import { getMetaGraphApiVersion } from "@/lib/meta/config";
+import { getActiveMetaConnection } from "@/lib/meta/connection-token";
 
 type MetaApiError = {
   error?: {
@@ -28,20 +29,9 @@ export type MetaPagingResponse<T> = {
   };
 };
 
-function requiredEnv(name: string): string {
-  const value = process.env[name];
-
-  if (!value) {
-    throw new Error(
-      `ยังไม่ได้ตั้งค่า ${name} ในไฟล์ .env.local`,
-    );
-  }
-
-  return value;
-}
-
-export function getMetaUserAccessToken(): string {
-  return requiredEnv("META_USER_ACCESS_TOKEN");
+export async function getMetaUserAccessToken(): Promise<string> {
+  const connection = await getActiveMetaConnection();
+  return connection.accessToken;
 }
 
 export function getMetaGraphVersion(): string {
@@ -93,7 +83,7 @@ export async function metaRequest<T>(
 
   const accessToken =
     options.accessToken ||
-    getMetaUserAccessToken();
+    (await getMetaUserAccessToken());
 
   const cleanEndpoint =
     endpoint.replace(/^\/+/, "");
