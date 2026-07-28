@@ -18,6 +18,13 @@ function integer(
   value: string | null,
   fallback: number,
 ) {
+  if (
+    value === null ||
+    value.trim() === ""
+  ) {
+    return fallback;
+  }
+
   const parsed = Number(value);
 
   return Number.isFinite(parsed)
@@ -242,13 +249,6 @@ export async function GET(
       prisma.managedPage.findMany({
         where: {
           isActive: true,
-          contents: {
-            some: {
-              analysis: {
-                isNot: null,
-              },
-            },
-          },
         },
         orderBy: {
           name: "asc",
