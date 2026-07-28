@@ -7,6 +7,7 @@ import {
   BarChart3,
   Bot,
   Boxes,
+  BrainCircuit,
   ChevronRight,
   CircleDollarSign,
   Database,
@@ -53,6 +54,11 @@ const menuGroups: MenuGroup[] = [
         title: "Marketing AI",
         href: "/marketing",
         icon: Megaphone,
+      },
+      {
+        title: "Content Intelligence",
+        href: "/marketing/content-intelligence",
+        icon: BrainCircuit,
       },
       {
         title: "Sales AI",
@@ -108,6 +114,10 @@ function isMenuActive(pathname: string, href?: string) {
 
   if (href === "/") {
     return pathname === "/";
+  }
+
+  if (href === "/marketing") {
+    return pathname === "/marketing";
   }
 
   return pathname === href || pathname.startsWith(`${href}/`);
