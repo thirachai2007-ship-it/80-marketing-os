@@ -23,6 +23,9 @@ model AdAccount {
   pageMappings   MetaPageAdAccountMapping[]
   campaignDrafts CampaignDraft[]
   audienceAssets AudienceAsset[]
+  metaCampaigns  MetaCampaign[]
+  metaAdSets     MetaAdSet[]
+  metaAds        MetaAd[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -104,6 +107,9 @@ model MetaConnection {
   pageMappings     MetaPageAdAccountMapping[]
   permissionAudits MetaPermissionAudit[]
   syncRuns         MetaSyncRun[]
+  campaigns        MetaCampaign[]
+  adSets           MetaAdSet[]
+  ads              MetaAd[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -191,6 +197,120 @@ model MetaSyncRun {
   @@index([metaConnectionId])
   @@index([resourceType, status])
   @@index([createdAt])
+}
+
+model MetaCampaign {
+  id String @id
+
+  metaConnectionId String
+  metaConnection   MetaConnection @relation(fields: [metaConnectionId], references: [id], onDelete: Cascade)
+
+  adAccountId String
+  adAccount   AdAccount @relation(fields: [adAccountId], references: [id], onDelete: Cascade)
+
+  name                     String
+  objective                String?
+  buyingType               String?
+  status                   String?
+  configuredStatus         String?
+  effectiveStatus          String?
+  specialAdCategoriesJson  String    @default("[]")
+  dailyBudgetMinorUnits    String?
+  lifetimeBudgetMinorUnits String?
+  startTime                DateTime?
+  stopTime                 DateTime?
+  metaCreatedTime          DateTime?
+  metaUpdatedTime          DateTime?
+
+  adSets MetaAdSet[]
+  ads    MetaAd[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([metaConnectionId])
+  @@index([adAccountId])
+  @@index([effectiveStatus])
+  @@index([metaUpdatedTime])
+}
+
+model MetaAdSet {
+  id String @id
+
+  metaConnectionId String
+  metaConnection   MetaConnection @relation(fields: [metaConnectionId], references: [id], onDelete: Cascade)
+
+  adAccountId String
+  adAccount   AdAccount @relation(fields: [adAccountId], references: [id], onDelete: Cascade)
+
+  campaignId String
+  campaign   MetaCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  name                     String
+  status                   String?
+  configuredStatus         String?
+  effectiveStatus          String?
+  dailyBudgetMinorUnits    String?
+  lifetimeBudgetMinorUnits String?
+  billingEvent             String?
+  optimizationGoal         String?
+  bidStrategy              String?
+  bidAmountMinorUnits      String?
+  targetingJson            String    @default("{}")
+  promotedObjectJson       String    @default("{}")
+  startTime                DateTime?
+  endTime                  DateTime?
+  metaCreatedTime          DateTime?
+  metaUpdatedTime          DateTime?
+
+  ads MetaAd[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([metaConnectionId])
+  @@index([adAccountId])
+  @@index([campaignId])
+  @@index([effectiveStatus])
+  @@index([metaUpdatedTime])
+}
+
+model MetaAd {
+  id String @id
+
+  metaConnectionId String
+  metaConnection   MetaConnection @relation(fields: [metaConnectionId], references: [id], onDelete: Cascade)
+
+  adAccountId String
+  adAccount   AdAccount @relation(fields: [adAccountId], references: [id], onDelete: Cascade)
+
+  campaignId String
+  campaign   MetaCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  adSetId String
+  adSet   MetaAdSet @relation(fields: [adSetId], references: [id], onDelete: Cascade)
+
+  name                   String
+  status                 String?
+  configuredStatus       String?
+  effectiveStatus        String?
+  creativeId             String?
+  creativeName           String?
+  objectStoryId          String?
+  effectiveObjectStoryId String?
+  metaCreatedTime        DateTime?
+  metaUpdatedTime        DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([metaConnectionId])
+  @@index([adAccountId])
+  @@index([campaignId])
+  @@index([adSetId])
+  @@index([effectiveStatus])
+  @@index([objectStoryId])
+  @@index([metaUpdatedTime])
 }
 
 model PageProductPolicy {
