@@ -7,6 +7,14 @@ export type ActiveMetaConnection = {
   accessToken: string;
 };
 
+export type ActiveMetaPageToken = {
+  id: string;
+  name: string;
+  category: string | null;
+  pictureUrl: string | null;
+  accessToken: string;
+};
+
 export async function getActiveMetaConnection(): Promise<
   ActiveMetaConnection
 > {
@@ -48,4 +56,60 @@ export async function getActiveMetaConnection(): Promise<
       authTag: connection.userAccessTokenAuthTag,
     }),
   };
+}
+
+export async function getActiveMetaPagesWithTokens(
+  metaConnectionId: string,
+): Promise<ActiveMetaPageToken[]> {
+  const pages = await prisma.managedPage.findMany({
+    where: {
+      metaConnectionId,
+      isActive: true,
+      accessTokenCiphertext: {
+        not: null,
+      },
+      accessTokenIv: {
+        not: null,
+      },
+      accessTokenAuthTag: {
+        not: null,
+      },
+    },
+    orderBy: {
+      name: "asc",
+    },
+    select: {
+      id: true,
+      name: true,
+      category: true,
+      pictureUrl: true,
+      accessTokenCiphertext: true,
+      accessTokenIv: true,
+      accessTokenAuthTag: true,
+    },
+  });
+
+  return pages.flatMap((page) => {
+    if (
+      !page.accessTokenCiphertext ||
+      !page.accessTokenIv ||
+      !page.accessTokenAuthTag
+    ) {
+      return [];
+    }
+
+    return [
+      {
+        id: page.id,
+        name: page.name,
+        category: page.category,
+        pictureUrl: page.pictureUrl,
+        accessToken: decryptMetaToken({
+          ciphertext: page.accessTokenCiphertext,
+          iv: page.accessTokenIv,
+          authTag: page.accessTokenAuthTag,
+        }),
+      },
+    ];
+  });
 }
