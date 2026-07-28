@@ -24,6 +24,10 @@ const pageTitles: Record<
     title: "Marketing AI",
     subtitle: "สร้างคอนเทนต์และแคมเปญด้วย AI",
   },
+  "/settings/meta": {
+    title: "Meta Integration",
+    subtitle: "จัดการการเชื่อมต่อและสถานะข้อมูล Meta",
+  },
 };
 
 function getPageInfo(pathname: string) {
@@ -33,6 +37,10 @@ function getPageInfo(pathname: string) {
 
   if (pathname.startsWith("/marketing")) {
     return pageTitles["/marketing"];
+  }
+
+  if (pathname.startsWith("/settings")) {
+    return pageTitles["/settings/meta"];
   }
 
   return {

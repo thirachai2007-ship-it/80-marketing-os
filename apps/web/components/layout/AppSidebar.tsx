@@ -96,8 +96,8 @@ const menuGroups: MenuGroup[] = [
       },
       {
         title: "Settings",
+        href: "/settings/meta",
         icon: Settings,
-        badge: "Soon",
       },
     ],
   },
