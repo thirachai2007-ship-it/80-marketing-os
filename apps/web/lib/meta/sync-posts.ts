@@ -7,6 +7,10 @@ import {
   metaRequest,
   type MetaPagingResponse,
 } from "@/lib/meta/client";
+import {
+  createFingerprint,
+  shouldReanalyze,
+} from "@/lib/marketing/fingerprint";
 import prisma from "@/lib/prisma";
 
 type MetaAttachment = {
@@ -169,10 +173,15 @@ async function syncPagePosts(
       },
       select: {
         id: true,
+        contentFingerprint: true,
+        fingerprintVersion: true,
       },
     });
-  const existingIds = new Set(
-    existingPosts.map((post) => post.id),
+  const existingById = new Map(
+    existingPosts.map((post) => [
+      post.id,
+      post,
+    ]),
   );
 
   for (
@@ -186,6 +195,45 @@ async function syncPagePosts(
       batch.map((post) => {
         const attachment =
           post.attachments?.data?.[0];
+        const mediaType =
+          detectMediaType(attachment);
+        const thumbnailUrl =
+          getThumbnailUrl(
+            post,
+            attachment,
+          );
+        const mediaUrl =
+          getMediaUrl(attachment);
+        const fingerprint =
+          createFingerprint({
+            pageId: page.id,
+            postId: post.id,
+            message: post.message,
+            mediaType,
+            imageUrl:
+              mediaType === "VIDEO"
+                ? null
+                : mediaUrl ||
+                  thumbnailUrl,
+            videoUrl:
+              mediaType === "VIDEO"
+                ? mediaUrl
+                : null,
+            permalinkUrl:
+              post.permalink_url,
+          });
+        const existing =
+          existingById.get(post.id);
+        const needsReanalysis =
+          !existing ||
+          shouldReanalyze({
+            previousContentFingerprint:
+              existing.contentFingerprint,
+            previousFingerprintVersion:
+              existing.fingerprintVersion,
+            nextContentFingerprint:
+              fingerprint.contentFingerprint,
+          });
         const data = {
           pageId: page.id,
           pageName: page.name,
@@ -195,15 +243,23 @@ async function syncPagePosts(
           ),
           permalinkUrl:
             post.permalink_url || null,
-          thumbnailUrl: getThumbnailUrl(
-            post,
-            attachment,
-          ),
-          mediaUrl: getMediaUrl(attachment),
-          mediaType:
-            detectMediaType(attachment),
+          thumbnailUrl,
+          mediaUrl,
+          mediaType,
           postId: post.id,
           objectStoryId: post.id,
+          fingerprint:
+            fingerprint.fingerprint,
+          contentFingerprint:
+            fingerprint.contentFingerprint,
+          fingerprintVersion:
+            fingerprint.fingerprintVersion,
+          fingerprintUpdatedAt:
+            new Date(),
+          messageHash:
+            fingerprint.messageHash,
+          imageHash: fingerprint.imageHash,
+          videoHash: fingerprint.videoHash,
         };
 
         return prisma.pageContent.upsert({
@@ -213,15 +269,31 @@ async function syncPagePosts(
           create: {
             id: post.id,
             ...data,
+            analysisStatus: "PENDING",
+            analysisError: null,
+            analyzedAt: null,
+            campaignStatus: "NOT_READY",
           },
-          update: data,
+          update: {
+            ...data,
+            ...(needsReanalysis
+              ? {
+                  analysisStatus:
+                    "PENDING",
+                  analysisError: null,
+                  analyzedAt: null,
+                  campaignStatus:
+                    "NOT_READY",
+                }
+              : {}),
+          },
         });
       }),
     );
   }
 
   const updated = posts.filter((post) =>
-    existingIds.has(post.id),
+    existingById.has(post.id),
   ).length;
 
   return {

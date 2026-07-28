@@ -1,10 +1,10 @@
 import prisma from "@/lib/prisma";
 
 import {
-  CONTENT_FINGERPRINT_VERSION,
-  createContentFingerprint,
-  hasContentChanged,
-} from "@/lib/media-buyer/content-fingerprint";
+  createFingerprint,
+  FINGERPRINT_VERSION,
+  shouldReanalyze,
+} from "@/lib/marketing/fingerprint";
 
 type BackfillOptions = {
   batchSize?: number;
@@ -74,19 +74,36 @@ export async function backfillContentFingerprints(
   let unchanged = 0;
 
   for (const content of batch) {
-    const result =
-      createContentFingerprint(content);
+    const result = createFingerprint({
+      pageId: content.pageId,
+      postId:
+        content.postId ||
+        content.objectStoryId ||
+        content.id,
+      message: content.message,
+      mediaType: content.mediaType,
+      imageUrl:
+        content.mediaType === "VIDEO"
+          ? null
+          : content.mediaUrl ||
+            content.thumbnailUrl,
+      videoUrl:
+        content.mediaType === "VIDEO"
+          ? content.mediaUrl
+          : null,
+      permalinkUrl: content.permalinkUrl,
+    });
 
     const hadFingerprint =
       Boolean(content.contentFingerprint);
 
     const contentChanged =
-      hasContentChanged({
-        previousFingerprint:
+      shouldReanalyze({
+        previousContentFingerprint:
           content.contentFingerprint,
-        currentFingerprint:
-          result.fingerprint,
-        previousVersion:
+        nextContentFingerprint:
+          result.contentFingerprint,
+        previousFingerprintVersion:
           content.fingerprintVersion,
       });
 
@@ -105,12 +122,17 @@ export async function backfillContentFingerprints(
 
       data: {
         contentFingerprint:
-          result.fingerprint,
+          result.contentFingerprint,
 
         fingerprintVersion:
-          CONTENT_FINGERPRINT_VERSION,
+          FINGERPRINT_VERSION,
 
         fingerprintUpdatedAt: new Date(),
+
+        fingerprint: result.fingerprint,
+        messageHash: result.messageHash,
+        imageHash: result.imageHash,
+        videoHash: result.videoHash,
 
         /*
          * ถ้าโพสต์เคยวิเคราะห์แล้วและเนื้อหาเปลี่ยน
