@@ -9,6 +9,7 @@ import {
 import {
   Activity,
   ArrowRight,
+  CircleGauge,
   BrainCircuit,
   CheckCircle2,
   CirclePause,
@@ -333,6 +334,13 @@ export default function ContentIntelligenceControlCenter() {
         </div>
 
         <div className="flex flex-wrap gap-3">
+          <Link
+            href="/marketing/content-intelligence/coverage"
+            className="inline-flex h-11 items-center gap-2 rounded-2xl border border-teal-200 bg-teal-50 px-4 text-xs font-semibold text-teal-700 shadow-sm"
+          >
+            <CircleGauge size={15} />
+            Coverage Planner
+          </Link>
           <Link
             href="/marketing/content-intelligence/results"
             className="inline-flex h-11 items-center gap-2 rounded-2xl bg-slate-900 px-4 text-xs font-semibold text-white shadow-sm"
