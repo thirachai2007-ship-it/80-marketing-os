@@ -9,6 +9,9 @@ type MetaPage = {
   category?: string;
   access_token?: string;
   tasks?: string[];
+  business?: {
+    id: string;
+  };
   picture?: {
     data?: {
       url?: string;
@@ -46,6 +49,7 @@ export async function syncMetaPages() {
           "picture.width(160).height(160)",
           "access_token",
           "tasks",
+          "business{id}",
         ].join(","),
         limit: "100",
       },
@@ -94,6 +98,7 @@ export async function syncMetaPages() {
           category: page.category,
           pictureUrl: page.picture?.data?.url,
           isActive: true,
+          businessId: page.business?.id,
           metaConnectionId: connection.id,
           accessTokenCiphertext:
             encrypted.ciphertext,
@@ -108,6 +113,7 @@ export async function syncMetaPages() {
           category: page.category,
           pictureUrl: page.picture?.data?.url,
           isActive: true,
+          businessId: page.business?.id,
           metaConnectionId: connection.id,
           accessTokenCiphertext:
             encrypted.ciphertext,
