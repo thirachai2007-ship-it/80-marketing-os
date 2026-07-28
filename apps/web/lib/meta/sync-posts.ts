@@ -163,11 +163,11 @@ async function syncPagePosts(
   for (
     let start = 0;
     start < posts.length;
-    start += 50
+    start += 10
   ) {
-    const batch = posts.slice(start, start + 50);
+    const batch = posts.slice(start, start + 10);
 
-    await prisma.$transaction(
+    await Promise.all(
       batch.map((post) => {
         const attachment =
           post.attachments?.data?.[0];
@@ -243,11 +243,27 @@ export async function syncMetaPosts() {
       );
     }
 
-    const results = await Promise.allSettled(
-      pages.map((page) =>
-        syncPagePosts(page),
-      ),
-    );
+    const results: PromiseSettledResult<PageSyncResult>[] =
+      [];
+
+    for (
+      let start = 0;
+      start < pages.length;
+      start += 2
+    ) {
+      const pageBatch = pages.slice(
+        start,
+        start + 2,
+      );
+
+      results.push(
+        ...(await Promise.allSettled(
+          pageBatch.map((page) =>
+            syncPagePosts(page),
+          ),
+        )),
+      );
+    }
     const syncedPages: PageSyncResult[] = [];
     const failedPages: {
       pageId: string;
