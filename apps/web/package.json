@@ -7,7 +7,8 @@
     "build": "prisma generate && next build",
     "postinstall": "prisma generate",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "verify:meta": "node scripts/verify-meta-production.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
