@@ -2852,7 +2852,7 @@ export async function runContentAnalysisWorker(
     claimedItems.push(claimed);
   }
 
-  const concurrency = Math.min(3, claimedItems.length);
+  const concurrency = Math.min(5, claimedItems.length);
   let nextIndex = 0;
 
   async function processClaimedItems() {
