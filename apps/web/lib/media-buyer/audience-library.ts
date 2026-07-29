@@ -32,7 +32,7 @@ export type AudienceAssetStatus =
   | "ARCHIVED"
   | "FAILED";
 
-type AudienceVersionInput = {
+export type AudienceVersionInput = {
   strategyName: string;
   changeReason?: string | null;
 
@@ -49,6 +49,12 @@ type AudienceVersionInput = {
 
   rules?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
+};
+
+export type AdjustAudienceDraftInput = {
+  audienceAssetId: string;
+  changeReason: string;
+  version: Partial<AudienceVersionInput>;
 };
 
 type AudienceSourceInput = {
@@ -904,6 +910,78 @@ export async function createAudienceDraft(
 
     reason:
       "สร้าง Audience Draft สำเร็จ",
+  };
+}
+
+export async function adjustAudienceDraft(
+  input: AdjustAudienceDraftInput,
+): Promise<CreateAudienceDraftResult> {
+  const audienceAssetId = normalizeText(input.audienceAssetId);
+  const changeReason = normalizeText(input.changeReason);
+  if (!audienceAssetId || !changeReason) {
+    return { libraryVersion: AUDIENCE_LIBRARY_VERSION, status: "SKIPPED", reason: "ต้องระบุ audienceAssetId และเหตุผลการปรับ Audience" };
+  }
+
+  const asset = await prisma.audienceAsset.findUnique({
+    where: { id: audienceAssetId },
+    select: { id: true, isActive: true, versions: { orderBy: { version: "desc" }, take: 1 } },
+  });
+  const previous = asset?.versions[0];
+  if (!asset || !asset.isActive || !previous) {
+    return {
+      libraryVersion: AUDIENCE_LIBRARY_VERSION,
+      status: "SKIPPED",
+      audienceAssetId: asset?.id,
+      reason: asset ? "Audience ไม่มี Version เดิมที่ปรับได้" : "ไม่พบ Audience ที่ระบุ",
+    };
+  }
+
+  const next = input.version;
+  const created = await prisma.$transaction(async (tx) => {
+    const version = await tx.audienceVersion.create({
+      data: {
+        audienceAssetId: asset.id,
+        version: previous.version + 1,
+        strategyName: normalizeText(next.strategyName) || previous.strategyName,
+        changeReason,
+        gender: next.gender === undefined ? previous.gender : normalizeText(next.gender) || null,
+        ageMin: next.ageMin === undefined ? previous.ageMin : next.ageMin,
+        ageMax: next.ageMax === undefined ? previous.ageMax : next.ageMax,
+        provincesJson: next.provinces === undefined ? previous.provincesJson : safeJson(next.provinces, "[]"),
+        businessTypesJson: next.businessTypes === undefined ? previous.businessTypesJson : safeJson(next.businessTypes, "[]"),
+        interestsJson: next.interests === undefined ? previous.interestsJson : safeJson(next.interests, "[]"),
+        behaviorsJson: next.behaviors === undefined ? previous.behaviorsJson : safeJson(next.behaviors, "[]"),
+        excludedAudiencesJson: next.excludedAudiences === undefined ? previous.excludedAudiencesJson : safeJson(next.excludedAudiences, "[]"),
+        placementsJson: next.placements === undefined ? previous.placementsJson : safeJson(next.placements, "[]"),
+        rulesJson: next.rules === undefined ? previous.rulesJson : safeJson(next.rules, "{}"),
+        metadataJson: safeJson({ libraryVersion: AUDIENCE_LIBRARY_VERSION, adjustedFromVersion: previous.version, ...(next.metadata ?? {}) }, "{}"),
+        status: "DRAFT",
+        approvalStatus: "NOT_SUBMITTED",
+        isSelected: false,
+        isUsed: false,
+      },
+    });
+    await tx.audienceAsset.update({
+      where: { id: asset.id },
+      data: { learningStatus: "NEED_OPTIMIZATION", approvalStatus: "NOT_SUBMITTED" },
+    });
+    return version;
+  });
+
+  await writeAudienceDecisionLog({
+    action: "ADJUST_AUDIENCE_VERSION",
+    reason: changeReason,
+    confidence: 100,
+    inputJson: { audienceAssetId: asset.id, previousVersion: previous.version, changes: next },
+    outputJson: { audienceVersionId: created.id, version: created.version, status: created.status, ownerApprovalRequired: true, metaMutationExecuted: false },
+  });
+
+  return {
+    libraryVersion: AUDIENCE_LIBRARY_VERSION,
+    status: "CREATED",
+    audienceAssetId: asset.id,
+    audienceVersionId: created.id,
+    reason: `สร้าง Audience Version ${created.version} เพื่อรอ Owner Approval สำเร็จ`,
   };
 }
 
