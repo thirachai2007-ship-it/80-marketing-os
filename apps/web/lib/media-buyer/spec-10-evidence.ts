@@ -6,6 +6,7 @@ export const SPEC_10_CANARY_PREFIX = "SPEC10-PAUSED-CANARY";
 export async function createSpec10PausedCanary(options: {
   pageId: string;
   productCategory: string;
+  campaignPrefix?: string;
 }) {
   const cutoff = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000);
   const page = await prisma.managedPage.findFirst({
@@ -19,7 +20,7 @@ export async function createSpec10PausedCanary(options: {
   if (!page?.adAccountId) throw new Error("SPEC10_PAGE_HAS_NO_AD_ACCOUNT");
   const adAccountId = page.adAccountId;
 
-  const campaignName = `${SPEC_10_CANARY_PREFIX}-${page.id}-${options.productCategory}`;
+  const campaignName = `${options.campaignPrefix ?? SPEC_10_CANARY_PREFIX}-${page.id}-${options.productCategory}`;
   const existing = await prisma.campaignDraft.findFirst({
     where: { campaignName, status: "PAUSED" },
     select: { id: true, ads: { select: { id: true } } },
