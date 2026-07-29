@@ -14,6 +14,7 @@ function rounded(value: number | null, digits = 4) {
 
 export async function getSpec21Evidence() {
   const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const freshSyncCutoff = new Date(Date.now() - 30 * 60 * 1000);
   const [summary, latestInsight, latestCompletedSync] = await Promise.all([
     prisma.metaAdInsight.aggregate({
       where: { dateStop: { gte: since } },
@@ -32,9 +33,14 @@ export async function getSpec21Evidence() {
       select: { updatedAt: true, dateStop: true, actionValuesJson: true },
     }),
     prisma.metaSyncRun.findFirst({
-      where: { resourceType: "AD_INSIGHTS", trigger: "SCHEDULED_AUTONOMY", status: "COMPLETED" },
+      where: {
+        resourceType: "AD_INSIGHTS",
+        trigger: "SCHEDULED_AUTONOMY",
+        status: "COMPLETED",
+        completedAt: { gte: freshSyncCutoff },
+      },
       orderBy: { completedAt: "desc" },
-      select: { completedAt: true },
+      select: { completedAt: true, metadataJson: true },
     }),
   ]);
 
@@ -66,9 +72,16 @@ export async function getSpec21Evidence() {
     revenue: "ANALYZED_FROM_META_ACTION_VALUES",
     roas: metrics.roas === null ? "NO_SPEND" : "ANALYZED",
   };
+  let revenueSyncProven = false;
+  try {
+    revenueSyncProven = latestCompletedSync
+      ? JSON.parse(latestCompletedSync.metadataJson).capturesActionValues === true
+      : false;
+  } catch {}
   const gaps: string[] = [];
   if (summary._count._all === 0) gaps.push("NO_REAL_META_INSIGHTS_IN_30_DAY_WINDOW");
   if (!latestCompletedSync?.completedAt) gaps.push("NO_COMPLETED_AUTOMATIC_INSIGHT_SYNC");
+  if (!revenueSyncProven) gaps.push("AUTOMATIC_REVENUE_ACTION_VALUES_NOT_PROVEN");
   if (!latestInsight) gaps.push("NO_INSIGHT_REVENUE_SCHEMA_EVIDENCE");
   const pass = gaps.length === 0;
 
@@ -89,6 +102,7 @@ export async function getSpec21Evidence() {
       actionValuesCaptured: latestInsight.actionValuesJson !== "[]",
     } : null,
     latestCompletedAutomaticSyncAt: latestCompletedSync?.completedAt ?? null,
+    revenueSyncProven,
     gapCount: gaps.length,
     gaps,
     safety: { readOnlyAnalysis: true, metaMutationExecuted: false, budgetChanged: false, realSpendUsed: false },

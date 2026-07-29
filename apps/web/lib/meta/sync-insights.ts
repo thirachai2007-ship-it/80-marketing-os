@@ -507,6 +507,7 @@ export async function syncMetaInsights({
           dateRange:
             dateRange || null,
           level: "ad",
+          capturesActionValues: true,
           hasNext,
           spendSatang,
         }),
