@@ -1,5 +1,7 @@
 import prisma from "@/lib/prisma";
 import { syncAllMetaPosts } from "@/lib/meta/sync-posts";
+import { syncMetaAdObjects } from "@/lib/meta/sync-ad-objects";
+import { syncMetaInsights } from "@/lib/meta/sync-insights";
 
 import { runContentAdLinkageBackfillBatch } from "@/lib/media-buyer/content-ad-linkage-backfill";
 import { runBalancedAnalysisBatch } from "@/lib/media-buyer/content-analysis-coverage";
@@ -17,6 +19,32 @@ const BACKFILL_PAGE_LIMIT = 5;
 const ANALYSIS_BATCH_SIZE = 3;
 const CAMPAIGN_BATCH_SIZE = 5;
 const STALE_KERNEL_MS = 9 * 60 * 1000;
+
+export async function runAutomaticAdTracking() {
+  const accounts = await prisma.adAccount.findMany({
+    where: { isActive: true, metaConnection: { status: "ACTIVE" } },
+    orderBy: { id: "asc" },
+    select: { id: true, metaConnectionId: true },
+  });
+  const results = [];
+  for (const account of accounts) {
+    for (const resource of ["campaigns", "adsets", "ads"] as const) {
+      results.push(await syncMetaAdObjects({
+        adAccountId: account.id,
+        metaConnectionId: account.metaConnectionId ?? undefined,
+        resource,
+        trigger: "SCHEDULED_AUTONOMY",
+      }));
+    }
+    results.push(await syncMetaInsights({
+      adAccountId: account.id,
+      metaConnectionId: account.metaConnectionId ?? undefined,
+      datePreset: "last_7d",
+      trigger: "SCHEDULED_AUTONOMY",
+    }));
+  }
+  return { trackedAccounts: accounts.length, syncOperations: results.length, results };
+}
 
 type StepResult = {
   step: string;
@@ -198,6 +226,12 @@ export async function runAutonomyKernel() {
     steps.push(
       await runStep("META_POST_SYNC", () =>
         syncAllMetaPosts(),
+      ),
+    );
+
+    steps.push(
+      await runStep("META_AD_TRACKING", () =>
+        runAutomaticAdTracking(),
       ),
     );
 

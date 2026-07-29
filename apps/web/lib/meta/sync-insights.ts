@@ -274,12 +274,14 @@ export async function syncMetaInsights({
   dateRange,
   after,
   metaConnectionId,
+  trigger = "MANUAL",
 }: {
   adAccountId: string;
   datePreset?: string;
   dateRange?: MetaInsightDateRange;
   after?: string;
   metaConnectionId?: string;
+  trigger?: string;
 }) {
   if (
     Boolean(datePreset) ===
@@ -335,7 +337,7 @@ export async function syncMetaInsights({
       metaConnectionId: connection.id,
       resourceType: "AD_INSIGHTS",
       status: "RUNNING",
-      trigger: "MANUAL",
+      trigger,
       cursor: after || null,
       startedAt: new Date(),
       metadataJson: JSON.stringify({

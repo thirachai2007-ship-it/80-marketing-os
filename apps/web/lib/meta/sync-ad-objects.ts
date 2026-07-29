@@ -383,11 +383,13 @@ export async function syncMetaAdObjects({
   resource,
   after,
   metaConnectionId,
+  trigger = "MANUAL",
 }: {
   adAccountId: string;
   resource: MetaAdObjectResource;
   after?: string;
   metaConnectionId?: string;
+  trigger?: string;
 }) {
   const connection =
     metaConnectionId
@@ -419,7 +421,7 @@ export async function syncMetaAdObjects({
       resourceType:
         `AD_OBJECTS_${resource.toUpperCase()}`,
       status: "RUNNING",
-      trigger: "MANUAL",
+      trigger,
       cursor: after || null,
       startedAt: new Date(),
       metadataJson: JSON.stringify({
