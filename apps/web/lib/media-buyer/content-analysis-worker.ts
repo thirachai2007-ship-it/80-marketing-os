@@ -1747,6 +1747,18 @@ async function queuePendingContent(input: {
                     modalityAnalysisVersion: { lt: 2 },
                   },
                 },
+                {
+                  AND: [
+                    { mediaType: "VIDEO" },
+                    {
+                      analysis: {
+                        inputEvidenceJson: {
+                          contains: '"actualVideoAnalyzed":false',
+                        },
+                      },
+                    },
+                  ],
+                },
               ],
             }
           : {}),
@@ -1878,6 +1890,14 @@ async function queuePendingContent(input: {
             where: { id: content.id, analysisStatus: "PENDING" },
             data: { analysisStatus: "QUEUED", analysisError: null },
           });
+
+          if (existing.status === "READY") {
+            queued += 1;
+          }
+        }
+
+        if (queued >= input.batchSize) {
+          break;
         }
 
         continue;
@@ -1965,6 +1985,8 @@ async function claimNextQueueItem(input: {
   workerId: string;
   pageId?: string;
   productCategory?: string;
+  mediaType?: string;
+  modalityV2Only?: boolean;
 }): Promise<{
   id: string;
   attempts: number;
@@ -1996,6 +2018,35 @@ async function claimNextQueueItem(input: {
             ? {
                 productCategory:
                   input.productCategory,
+              }
+            : {}),
+          ...(input.mediaType
+            ? {
+                mediaType: normalizeText(input.mediaType).toUpperCase(),
+              }
+            : {}),
+          ...(input.modalityV2Only
+            ? {
+                OR: [
+                  { analysis: null },
+                  {
+                    analysis: {
+                      modalityAnalysisVersion: { lt: 2 },
+                    },
+                  },
+                  {
+                    AND: [
+                      { mediaType: "VIDEO" },
+                      {
+                        analysis: {
+                          inputEvidenceJson: {
+                            contains: '"actualVideoAnalyzed":false',
+                          },
+                        },
+                      },
+                    ],
+                  },
+                ],
               }
             : {}),
         },
@@ -3043,6 +3094,12 @@ export async function runContentAnalysisWorker(
 
         productCategory:
           options.productCategory,
+
+        mediaType:
+          options.mediaType,
+
+        modalityV2Only:
+          options.modalityV2Only,
       });
 
     if (!claimed) {
