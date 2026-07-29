@@ -49,11 +49,26 @@ export async function runAutomaticAdTracking() {
     orderBy: { id: "asc" },
     select: { id: true, metaConnectionId: true },
   });
-  const results = [];
+  const results: Awaited<ReturnType<typeof trackAdAccount>> = [];
+  const failures: Array<{ adAccountId: string; error: string }> = [];
   for (let start = 0; start < accounts.length; start += TRACKING_ACCOUNT_CONCURRENCY) {
     const batch = accounts.slice(start, start + TRACKING_ACCOUNT_CONCURRENCY);
-    const batchResults = await Promise.all(batch.map(trackAdAccount));
-    results.push(...batchResults.flat());
+    const batchResults = await Promise.allSettled(batch.map(trackAdAccount));
+    batchResults.forEach((result, index) => {
+      if (result.status === "fulfilled") {
+        results.push(...result.value);
+        return;
+      }
+      failures.push({
+        adAccountId: batch[index].id,
+        error: errorMessage(result.reason),
+      });
+    });
+  }
+  if (failures.length > 0) {
+    throw new Error(
+      `Meta ad tracking failed for ${failures.length}/${accounts.length} accounts: ${JSON.stringify(failures)}`,
+    );
   }
   return {
     trackedAccounts: accounts.length,
