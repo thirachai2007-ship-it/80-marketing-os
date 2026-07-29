@@ -16,6 +16,7 @@ import {
   CirclePause,
   CirclePlay,
   Clock3,
+  Link2,
   LoaderCircle,
   RefreshCcw,
   ShieldCheck,
@@ -220,6 +221,8 @@ export default function ContentIntelligenceControlCenter() {
   }, []);
 
   useEffect(() => {
+    // Synchronize this client control center with the server-side orchestrator.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, [load]);
 
@@ -348,6 +351,13 @@ export default function ContentIntelligenceControlCenter() {
           >
             <CircleGauge size={15} />
             Coverage Planner
+          </Link>
+          <Link
+            href="/marketing/content-intelligence/linkage-backfill"
+            className="inline-flex h-11 items-center gap-2 rounded-2xl border border-blue-200 bg-blue-50 px-4 text-xs font-semibold text-blue-700 shadow-sm"
+          >
+            <Link2 size={15} />
+            Linkage Backfill
           </Link>
           <Link
             href="/marketing/content-intelligence/correlation"

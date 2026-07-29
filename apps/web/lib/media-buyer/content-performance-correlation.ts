@@ -4,6 +4,10 @@ import {
   type CorrelationPoint,
   type CorrelationResult,
 } from "@/lib/media-buyer/content-performance-correlation-math";
+import {
+  resolveContentAdLinkage,
+  type ContentAdLinkageAccountMapping,
+} from "@/lib/media-buyer/content-ad-linkage-matcher";
 import { FINGERPRINT_VERSION } from "@/lib/marketing/fingerprint";
 import prisma from "@/lib/prisma";
 
@@ -84,6 +88,7 @@ type AnalysisCandidate = {
     pageName: string;
     postId: string;
     objectStoryId: string;
+    previousMetaAdId: string | null;
     productCategory: string;
     thumbnailUrl: string | null;
     mediaUrl: string | null;
@@ -93,6 +98,7 @@ type AnalysisCandidate = {
       id: string;
       name: string;
       pictureUrl: string | null;
+      adAccountId: string | null;
     };
   };
 };
@@ -105,6 +111,7 @@ type MetaAdRecord = {
   creativeId: string | null;
   objectStoryId: string | null;
   effectiveObjectStoryId: string | null;
+  metaUpdatedTime: Date | null;
   campaign: {
     objective: string | null;
   };
@@ -382,13 +389,36 @@ function rubricKey(
   ].join("|");
 }
 
-function utcStartOfDay(date: Date) {
+function reportingDayBoundary(
+  date: Date,
+  timeZone: string,
+) {
+  const parts =
+    new Intl.DateTimeFormat(
+      "en-CA",
+      {
+        timeZone,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      },
+    ).formatToParts(date);
+  const part = (type: string) =>
+    parts.find(
+      (item) => item.type === type,
+    )?.value;
+  const year = part("year");
+  const month = part("month");
+  const day = part("day");
+
+  if (!year || !month || !day) {
+    throw new Error(
+      `ไม่สามารถคำนวณวันรายงาน ${timeZone} ได้`,
+    );
+  }
+
   return new Date(
-    Date.UTC(
-      date.getUTCFullYear(),
-      date.getUTCMonth(),
-      date.getUTCDate(),
-    ),
+    `${year}-${month}-${day}T00:00:00.000Z`,
   );
 }
 
@@ -398,319 +428,109 @@ function utcDateKey(date: Date) {
     .slice(0, 10);
 }
 
-function addToCandidateMap(
-  map: Map<string, Set<string>>,
-  adId: string,
-  contentId: string,
-) {
-  const candidates =
-    map.get(adId) ||
-    new Set<string>();
-
-  candidates.add(contentId);
-  map.set(adId, candidates);
-}
-
-function validateDraftLink(
-  draft: DraftMappingRecord,
-  content: AnalysisCandidate["content"],
-  ad: MetaAdRecord,
-) {
-  if (
-    draft.campaignDraft.pageId !==
-      content.pageId ||
-    draft.campaignDraft.adAccountId !==
-      ad.adAccountId
-  ) {
-    return false;
-  }
-
-  if (
-    draft.campaignDraft
-      .metaCampaignId &&
-    draft.campaignDraft
-      .metaCampaignId !== ad.campaignId
-  ) {
-    return false;
-  }
-
-  if (
-    draft.campaignDraft.metaAdSetId &&
-    draft.campaignDraft.metaAdSetId !==
-      ad.adSetId
-  ) {
-    return false;
-  }
-
-  return true;
-}
-
 function resolveAdLinks({
   analyses,
   metaAds,
   drafts,
+  accountMappings,
 }: {
   analyses: AnalysisCandidate[];
   metaAds: MetaAdRecord[];
   drafts: DraftMappingRecord[];
+  accountMappings:
+    ContentAdLinkageAccountMapping[];
 }) {
-  const contentById = new Map(
-    analyses.map((analysis) => [
-      analysis.content.id,
-      analysis.content,
-    ]),
-  );
   const adById = new Map(
     metaAds.map((ad) => [ad.id, ad]),
   );
-  const adsByCreativeId = new Map<
-    string,
-    MetaAdRecord[]
-  >();
-  const directCandidates = new Map<
-    string,
-    Set<string>
-  >();
-  const creativeCandidates = new Map<
-    string,
-    Set<string>
-  >();
-  const storyCandidates = new Map<
-    string,
-    Set<string>
-  >();
-  let excludedVariantDrafts = 0;
-  let invalidDraftMappings = 0;
-
-  for (const ad of metaAds) {
-    const creativeId = normalizeText(
-      ad.creativeId,
-    );
-
-    if (creativeId) {
-      const items =
-        adsByCreativeId.get(
-          creativeId,
-        ) || [];
-      items.push(ad);
-      adsByCreativeId.set(
-        creativeId,
-        items,
-      );
-    }
-  }
-
-  for (const draft of drafts) {
-    const contentId =
-      normalizeText(draft.contentId);
-    const content =
-      contentById.get(contentId);
-
-    if (!content) {
-      continue;
-    }
-
-    if (
-      draft.creativeMode !==
-        "EXISTING_POST" ||
-      draft.darkPostCopyId !== null ||
-      draft.creativeRevisionId !== null
-    ) {
-      excludedVariantDrafts += 1;
-      continue;
-    }
-
-    const directAdId = normalizeText(
-      draft.metaAdId,
-    );
-
-    if (directAdId) {
-      const ad = adById.get(directAdId);
-
-      if (
-        ad &&
-        validateDraftLink(
-          draft,
-          content,
-          ad,
-        )
-      ) {
-        addToCandidateMap(
-          directCandidates,
-          ad.id,
-          contentId,
-        );
-      } else {
-        invalidDraftMappings += 1;
-      }
-    }
-
-    const creativeId = normalizeText(
-      draft.metaCreativeId,
-    );
-
-    if (creativeId) {
-      const ads =
-        adsByCreativeId.get(
-          creativeId,
-        ) || [];
-
-      for (const ad of ads) {
-        if (
-          validateDraftLink(
-            draft,
-            content,
-            ad,
-          )
-        ) {
-          addToCandidateMap(
-            creativeCandidates,
-            ad.id,
-            contentId,
-          );
-        } else {
-          invalidDraftMappings += 1;
-        }
-      }
-    }
-  }
-
-  const contentIdsByStory =
-    new Map<string, Set<string>>();
-
-  for (const analysis of analyses) {
-    const storyIds = new Set(
-      [
-        analysis.content.id,
-        analysis.content.postId,
-        analysis.content.objectStoryId,
-      ]
-        .map(normalizeText)
-        .filter(Boolean),
-    );
-
-    for (const storyId of storyIds) {
-      const contentIds =
-        contentIdsByStory.get(
-          storyId,
-        ) || new Set<string>();
-      contentIds.add(
-        analysis.content.id,
-      );
-      contentIdsByStory.set(
-        storyId,
-        contentIds,
-      );
-    }
-  }
-
-  for (const ad of metaAds) {
-    const storyIds = new Set(
-      [
-        ad.objectStoryId,
-        ad.effectiveObjectStoryId,
-      ]
-        .map(normalizeText)
-        .filter(Boolean),
-    );
-
-    for (const storyId of storyIds) {
-      const contentIds =
-        contentIdsByStory.get(storyId);
-
-      if (!contentIds) {
-        continue;
-      }
-
-      for (const contentId of contentIds) {
-        addToCandidateMap(
-          storyCandidates,
-          ad.id,
-          contentId,
-        );
-      }
-    }
-  }
-
-  const links: ResolvedAdLink[] = [];
-  let ambiguousAds = 0;
-
-  for (const ad of metaAds) {
-    const candidateGroups: Array<{
-      method: ContentPerformanceLinkMethod;
-      candidates:
-        | Set<string>
-        | undefined;
-    }> = [
-      {
-        method: "DIRECT_META_AD_ID",
-        candidates:
-          directCandidates.get(ad.id),
-      },
-      {
-        method: "META_CREATIVE_ID",
-        candidates:
-          creativeCandidates.get(ad.id),
-      },
-      {
-        method: "EXACT_STORY_ID",
-        candidates:
-          storyCandidates.get(ad.id),
-      },
-    ];
-
-    const selected =
-      candidateGroups.find(
-        (group) =>
-          group.candidates &&
-          group.candidates.size > 0,
-      );
-
-    if (!selected?.candidates) {
-      continue;
-    }
-
-    if (
-      selected.candidates.size !== 1
-    ) {
-      ambiguousAds += 1;
-      continue;
-    }
-
-    const contentId = [
-      ...selected.candidates,
-    ][0];
-
-    links.push({
-      adId: ad.id,
-      contentId,
-      method: selected.method,
-      objective:
-        normalizeObjective(
-          ad.campaign.objective,
-        ),
-      currency:
-        normalizeCurrency(
-          ad.adAccount.currency,
-        ),
-    });
-  }
-
-  links.sort(
-    (left, right) =>
-      left.contentId.localeCompare(
-        right.contentId,
-      ) ||
-      left.adId.localeCompare(
-        right.adId,
+  const sharedResolved =
+    resolveContentAdLinkage({
+      contents: analyses.map(
+        (analysis) => ({
+          id: analysis.content.id,
+          pageId:
+            analysis.content.pageId,
+          postId:
+            analysis.content.postId,
+          objectStoryId:
+            analysis.content
+              .objectStoryId,
+          previousMetaAdId:
+            analysis.content
+              .previousMetaAdId,
+        }),
       ),
-  );
+      ads: metaAds.map((ad) => ({
+        id: ad.id,
+        adAccountId:
+          ad.adAccountId,
+        campaignId:
+          ad.campaignId,
+        adSetId: ad.adSetId,
+        creativeId:
+          ad.creativeId,
+        objectStoryId:
+          ad.objectStoryId,
+        effectiveObjectStoryId:
+          ad.effectiveObjectStoryId,
+        metaUpdatedTime:
+          ad.metaUpdatedTime,
+      })),
+      drafts,
+      accountMappings: [
+        ...accountMappings,
+        ...analyses
+          .filter(
+            (analysis) =>
+              analysis.content.page
+                .adAccountId,
+          )
+          .map((analysis) => ({
+            pageId:
+              analysis.content.pageId,
+            adAccountId:
+              analysis.content.page
+                .adAccountId!,
+          })),
+      ],
+    });
+  const sharedLinks: ResolvedAdLink[] =
+    sharedResolved.links.map(
+      (link) => {
+        const ad = adById.get(
+          link.adId,
+        )!;
+
+        return {
+          adId: link.adId,
+          contentId:
+            link.contentId,
+          method: link.method,
+          objective:
+            normalizeObjective(
+              ad.campaign.objective,
+            ),
+          currency:
+            normalizeCurrency(
+              ad.adAccount.currency,
+            ),
+        };
+      },
+    );
 
   return {
-    links,
-    ambiguousAds,
-    invalidDraftMappings,
-    excludedVariantDrafts,
+    links: sharedLinks,
+    ambiguousAds:
+      sharedResolved.ambiguousAds
+        .length,
+    invalidDraftMappings:
+      sharedResolved
+        .invalidDraftMappings +
+      sharedResolved
+        .invalidPersistedLinks,
+    excludedVariantDrafts:
+      sharedResolved
+        .excludedVariantDrafts,
   };
 }
 
@@ -1226,18 +1046,6 @@ export async function getContentPerformanceCorrelation(
     ).toUpperCase();
   const requestedRubricKey =
     normalizeText(options.rubricKey);
-  const endDate = utcStartOfDay(
-    options.now || new Date(),
-  );
-  const startDate = new Date(
-    endDate.getTime() -
-      lookbackDays *
-        24 *
-        60 *
-        60 *
-        1_000,
-  );
-
   const [pages, analysesRaw] =
     await Promise.all([
       prisma.managedPage.findMany({
@@ -1309,6 +1117,7 @@ export async function getContentPerformanceCorrelation(
               pageName: true,
               postId: true,
               objectStoryId: true,
+              previousMetaAdId: true,
               productCategory: true,
               thumbnailUrl: true,
               mediaUrl: true,
@@ -1319,6 +1128,7 @@ export async function getContentPerformanceCorrelation(
                   id: true,
                   name: true,
                   pictureUrl: true,
+                  adAccountId: true,
                 },
               },
             },
@@ -1396,11 +1206,116 @@ export async function getContentPerformanceCorrelation(
           analysis.content.id,
       ),
     );
+  const selectedPageIds = Array.from(
+    new Set(
+      selectedAnalyses.map(
+        (analysis) =>
+          analysis.content.pageId,
+      ),
+    ),
+  );
+  const accountMappingsRaw =
+    selectedPageIds.length > 0
+      ? await prisma.metaPageAdAccountMapping.findMany(
+          {
+            where: {
+              pageId: {
+                in: selectedPageIds,
+              },
+              status: "ACTIVE",
+              metaConnection: {
+                status: "ACTIVE",
+              },
+            },
+            select: {
+              pageId: true,
+              adAccountId: true,
+            },
+          },
+        )
+      : [];
+  const allowedAccountIds =
+    Array.from(
+      new Set([
+        ...accountMappingsRaw.map(
+          (mapping) =>
+            mapping.adAccountId,
+        ),
+        ...selectedAnalyses
+          .map(
+            (analysis) =>
+              analysis.content.page
+                .adAccountId,
+          )
+          .filter(
+            (id): id is string =>
+              Boolean(id),
+          ),
+      ]),
+    );
+  const reportingAccounts =
+    allowedAccountIds.length > 0
+      ? await prisma.adAccount.findMany({
+          where: {
+            id: {
+              in: allowedAccountIds,
+            },
+            isActive: true,
+          },
+          select: {
+            timezone: true,
+          },
+        })
+      : [];
+  const reportingTimezones =
+    Array.from(
+      new Set(
+        reportingAccounts.map(
+          (account) =>
+            normalizeText(
+              account.timezone,
+            ) || "Asia/Bangkok",
+        ),
+      ),
+    );
+
+  if (
+    reportingTimezones.length > 1
+  ) {
+    throw new Error(
+      "พบหลาย Ad Account Timezone กรุณากรองให้เหลือขอบเขตเดียวก่อนคำนวณ Correlation",
+    );
+  }
+
+  const reportingTimezone =
+    reportingTimezones[0] ||
+    "Asia/Bangkok";
+  const endDate = reportingDayBoundary(
+    options.now || new Date(),
+    reportingTimezone,
+  );
+  const startDate = new Date(
+    endDate.getTime() -
+      lookbackDays *
+        24 *
+        60 *
+        60 *
+        1_000,
+  );
 
   const [metaAdsRaw, draftsRaw] =
-    selectedAnalyses.length > 0
+    selectedAnalyses.length > 0 &&
+    allowedAccountIds.length > 0
       ? await Promise.all([
           prisma.metaAd.findMany({
+            where: {
+              adAccountId: {
+                in: allowedAccountIds,
+              },
+              metaConnection: {
+                status: "ACTIVE",
+              },
+            },
             orderBy: {
               id: "asc",
             },
@@ -1413,6 +1328,7 @@ export async function getContentPerformanceCorrelation(
               objectStoryId: true,
               effectiveObjectStoryId:
                 true,
+              metaUpdatedTime: true,
               campaign: {
                 select: {
                   objective: true,
@@ -1429,7 +1345,9 @@ export async function getContentPerformanceCorrelation(
             {
               where: {
                 contentId: {
-                  not: null,
+                  in: [
+                    ...selectedContentIds,
+                  ],
                 },
                 OR: [
                   {
@@ -1470,19 +1388,14 @@ export async function getContentPerformanceCorrelation(
       : [[], []];
   const metaAds =
     metaAdsRaw as MetaAdRecord[];
-  const drafts = (
-    draftsRaw as DraftMappingRecord[]
-  ).filter(
-    (draft) =>
-      draft.contentId &&
-      selectedContentIds.has(
-        draft.contentId,
-      ),
-  );
+  const drafts =
+    draftsRaw as DraftMappingRecord[];
   const resolved = resolveAdLinks({
     analyses: selectedAnalyses,
     metaAds,
     drafts,
+    accountMappings:
+      accountMappingsRaw,
   });
   const objectives = Array.from(
     new Set(
@@ -2081,6 +1994,7 @@ export async function getContentPerformanceCorrelation(
       dateEndExclusive:
         endDate.toISOString(),
       completeDaysOnly: true,
+      reportingTimezone,
     },
     pages,
     rubrics,

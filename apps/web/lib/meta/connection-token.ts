@@ -15,13 +15,18 @@ export type ActiveMetaPageToken = {
   accessToken: string;
 };
 
-export async function getActiveMetaConnection(): Promise<
-  ActiveMetaConnection
-> {
+async function findActiveMetaConnection(
+  id?: string,
+): Promise<ActiveMetaConnection> {
   const connection =
     await prisma.metaConnection.findFirst({
       where: {
         status: "ACTIVE",
+        ...(id
+          ? {
+              id,
+            }
+          : {}),
       },
       orderBy: {
         updatedAt: "desc",
@@ -56,6 +61,18 @@ export async function getActiveMetaConnection(): Promise<
       authTag: connection.userAccessTokenAuthTag,
     }),
   };
+}
+
+export async function getActiveMetaConnection(): Promise<
+  ActiveMetaConnection
+> {
+  return findActiveMetaConnection();
+}
+
+export async function getActiveMetaConnectionById(
+  id: string,
+): Promise<ActiveMetaConnection> {
+  return findActiveMetaConnection(id);
 }
 
 export async function getActiveMetaPagesWithTokens(

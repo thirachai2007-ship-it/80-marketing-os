@@ -1000,6 +1000,20 @@ export default function ContentPerformanceCorrelationDashboard() {
                   .latestInsightDate ||
                   "ยังไม่มี"}
               </p>
+              {[
+                "NO_LINKED_ADS",
+                "NO_INSIGHTS",
+              ].includes(
+                data.readiness,
+              ) && (
+                <Link
+                  href="/marketing/content-intelligence/linkage-backfill"
+                  className="mt-3 inline-flex h-9 items-center gap-2 rounded-xl bg-white/80 px-3 text-[10px] font-bold shadow-sm"
+                >
+                  <Link2 size={14} />
+                  เปิด Linkage Backfill
+                </Link>
+              )}
             </div>
           </div>
         </section>

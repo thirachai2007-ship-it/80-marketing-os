@@ -2,7 +2,10 @@ import {
   metaRequest,
   type MetaPagingResponse,
 } from "@/lib/meta/client";
-import { getActiveMetaConnection } from "@/lib/meta/connection-token";
+import {
+  getActiveMetaConnection,
+  getActiveMetaConnectionById,
+} from "@/lib/meta/connection-token";
 import prisma from "@/lib/prisma";
 
 export type MetaAdObjectResource =
@@ -314,16 +317,6 @@ async function saveAd(
       item.configured_status || null,
     effectiveStatus:
       item.effective_status || null,
-    creativeId: item.creative?.id || null,
-    creativeName:
-      item.creative?.name || null,
-    objectStoryId:
-      item.creative?.object_story_id ||
-      null,
-    effectiveObjectStoryId:
-      item.creative
-        ?.effective_object_story_id ||
-      null,
     metaCreatedTime: parseDate(
       item.created_time,
     ),
@@ -339,8 +332,49 @@ async function saveAd(
     create: {
       id: item.id,
       ...data,
+      creativeId:
+        item.creative?.id || null,
+      creativeName:
+        item.creative?.name || null,
+      objectStoryId:
+        item.creative
+          ?.object_story_id || null,
+      effectiveObjectStoryId:
+        item.creative
+          ?.effective_object_story_id ||
+        null,
     },
-    update: data,
+    update: {
+      ...data,
+      ...(item.creative?.id
+        ? {
+            creativeId:
+              item.creative.id,
+          }
+        : {}),
+      ...(item.creative?.name
+        ? {
+            creativeName:
+              item.creative.name,
+          }
+        : {}),
+      ...(item.creative
+        ?.object_story_id
+        ? {
+            objectStoryId:
+              item.creative
+                .object_story_id,
+          }
+        : {}),
+      ...(item.creative
+        ?.effective_object_story_id
+        ? {
+            effectiveObjectStoryId:
+              item.creative
+                .effective_object_story_id,
+          }
+        : {}),
+    },
   });
 }
 
@@ -348,13 +382,19 @@ export async function syncMetaAdObjects({
   adAccountId,
   resource,
   after,
+  metaConnectionId,
 }: {
   adAccountId: string;
   resource: MetaAdObjectResource;
   after?: string;
+  metaConnectionId?: string;
 }) {
   const connection =
-    await getActiveMetaConnection();
+    metaConnectionId
+      ? await getActiveMetaConnectionById(
+          metaConnectionId,
+        )
+      : await getActiveMetaConnection();
   const account =
     await prisma.adAccount.findFirst({
       where: {
@@ -391,7 +431,7 @@ export async function syncMetaAdObjects({
   try {
     const params: Record<string, string> = {
       fields: RESOURCE_FIELDS[resource],
-      limit: "50",
+      limit: "100",
     };
 
     if (after) {

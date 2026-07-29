@@ -2,7 +2,10 @@ import {
   metaRequest,
   type MetaPagingResponse,
 } from "@/lib/meta/client";
-import { getActiveMetaConnection } from "@/lib/meta/connection-token";
+import {
+  getActiveMetaConnection,
+  getActiveMetaConnectionById,
+} from "@/lib/meta/connection-token";
 import prisma from "@/lib/prisma";
 
 const ALLOWED_DATE_PRESETS = new Set([
@@ -12,6 +15,11 @@ const ALLOWED_DATE_PRESETS = new Set([
   "this_month",
   "last_month",
 ]);
+
+export type MetaInsightDateRange = {
+  since: string;
+  until: string;
+};
 
 type MetaAction = {
   action_type: string;
@@ -86,18 +94,20 @@ function actionValue(
     return 0;
   }
 
-  return Math.round(
-    actions
-      .filter((action) =>
-        acceptedTypes.includes(
-          action.action_type,
-        ),
-      )
-      .reduce(
-        (sum, action) =>
-          sum + number(action.value),
-        0,
+  const candidates = actions
+    .filter((action) =>
+      acceptedTypes.includes(
+        action.action_type,
       ),
+    )
+    .map((action) =>
+      number(action.value),
+    );
+
+  return Math.round(
+    candidates.length > 0
+      ? Math.max(...candidates)
+      : 0,
   );
 }
 
@@ -261,14 +271,47 @@ export function validateInsightDatePreset(
 export async function syncMetaInsights({
   adAccountId,
   datePreset,
+  dateRange,
   after,
+  metaConnectionId,
 }: {
   adAccountId: string;
-  datePreset: string;
+  datePreset?: string;
+  dateRange?: MetaInsightDateRange;
   after?: string;
+  metaConnectionId?: string;
 }) {
+  if (
+    Boolean(datePreset) ===
+    Boolean(dateRange)
+  ) {
+    throw new Error(
+      "ต้องระบุ datePreset หรือ dateRange อย่างใดอย่างหนึ่ง",
+    );
+  }
+
+  if (
+    dateRange &&
+    (!/^\d{4}-\d{2}-\d{2}$/.test(
+      dateRange.since,
+    ) ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(
+        dateRange.until,
+      ) ||
+      dateRange.since >
+        dateRange.until)
+  ) {
+    throw new Error(
+      "dateRange ต้องเป็นวันที่ YYYY-MM-DD และ since ต้องไม่เกิน until",
+    );
+  }
+
   const connection =
-    await getActiveMetaConnection();
+    metaConnectionId
+      ? await getActiveMetaConnectionById(
+          metaConnectionId,
+        )
+      : await getActiveMetaConnection();
   const account =
     await prisma.adAccount.findFirst({
       where: {
@@ -297,7 +340,8 @@ export async function syncMetaInsights({
       startedAt: new Date(),
       metadataJson: JSON.stringify({
         adAccountId,
-        datePreset,
+        datePreset: datePreset || null,
+        dateRange: dateRange || null,
         level: "ad",
       }),
     },
@@ -306,7 +350,6 @@ export async function syncMetaInsights({
   try {
     const params: Record<string, string> = {
       level: "ad",
-      date_preset: datePreset,
       time_increment: "1",
       fields: [
         "date_start",
@@ -330,8 +373,16 @@ export async function syncMetaInsights({
         "actions",
         "cost_per_action_type",
       ].join(","),
-      limit: "50",
+      limit: "100",
     };
+
+    if (dateRange) {
+      params.time_range =
+        JSON.stringify(dateRange);
+    } else {
+      params.date_preset =
+        datePreset as string;
+    }
 
     if (after) {
       params.after = after;
@@ -353,25 +404,30 @@ export async function syncMetaInsights({
       dateStart: date(row.date_start),
       dateStop: date(row.date_stop),
     }));
-    const existing = new Set<string>();
-
-    for (const item of dates) {
-      const found =
-        await prisma.metaAdInsight.findUnique({
-          where: {
-            adId_dateStart_dateStop: item,
-          },
-          select: {
-            id: true,
-          },
-        });
-
-      if (found) {
-        existing.add(
+    const existingRows =
+      dates.length > 0
+        ? await prisma.metaAdInsight.findMany({
+            where: {
+              OR: dates.map((item) => ({
+                adId: item.adId,
+                dateStart:
+                  item.dateStart,
+                dateStop: item.dateStop,
+              })),
+            },
+            select: {
+              adId: true,
+              dateStart: true,
+              dateStop: true,
+            },
+          })
+        : [];
+    const existing = new Set(
+      existingRows.map(
+        (item) =>
           `${item.adId}:${item.dateStart.toISOString()}:${item.dateStop.toISOString()}`,
-        );
-      }
-    }
+      ),
+    );
 
     for (
       let start = 0;
@@ -422,7 +478,10 @@ export async function syncMetaInsights({
         metadataJson: JSON.stringify({
           adAccountId: account.id,
           adAccountName: account.name,
-          datePreset,
+          datePreset:
+            datePreset || null,
+          dateRange:
+            dateRange || null,
           level: "ad",
           hasNext,
           spendSatang,
@@ -435,7 +494,8 @@ export async function syncMetaInsights({
       status: "COMPLETED",
       adAccountId: account.id,
       adAccountName: account.name,
-      datePreset,
+      datePreset: datePreset || null,
+      dateRange: dateRange || null,
       level: "ad",
       itemsFound: rows.length,
       itemsCreated: rows.length - updated,
