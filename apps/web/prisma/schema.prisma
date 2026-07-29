@@ -499,6 +499,12 @@ model ContentAnalysis {
 
   rawAnalysisJson String?
 
+  inputEvidenceJson String @default("{}")
+  visibleTextJson   String @default("[]")
+  visualObservationsJson String @default("[]")
+  contextObservationsJson String @default("[]")
+  modalityAnalysisVersion Int @default(1)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

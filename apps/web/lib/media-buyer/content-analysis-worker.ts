@@ -2,6 +2,9 @@ import prisma from "@/lib/prisma";
 import {
   getContentAnalysisCutoff,
 } from "@/lib/media-buyer/content-analysis-policy";
+import {
+  extractRepresentativeVideoFrames,
+} from "@/lib/media-buyer/video-frame-extractor";
 
 export const CONTENT_ANALYSIS_WORKER_VERSION =
   "content-analysis-worker";
@@ -55,6 +58,7 @@ export type RunContentAnalysisWorkerOptions = {
   productCategory?: string;
   forceReanalyze?: boolean;
   queuePendingContent?: boolean;
+  modalityV2Only?: boolean;
   workerId?: string;
 };
 
@@ -116,6 +120,10 @@ type AnalysisOutput = {
   reasons: string[];
   weaknesses: string[];
 
+  visibleText: string[];
+  visualObservations: string[];
+  contextObservations: string[];
+
   useExistingPost: boolean;
   darkPostEligible: boolean;
   darkPostReason: string | null;
@@ -144,6 +152,17 @@ type AnalysisOutput = {
     description: string | null;
     callToAction: string;
   }>;
+};
+
+type ModalityInputEvidence = {
+  captionAnalyzed: boolean;
+  contextAnalyzed: true;
+  visualSource: string;
+  imageCount: number;
+  actualVideoAnalyzed: boolean;
+  videoFrameCount: number;
+  videoExtractionMethod: string | null;
+  fallbackReason: string | null;
 };
 
 
@@ -571,6 +590,76 @@ function resolveVisualInput(input: {
   };
 }
 
+async function prepareModalityInput(input: {
+  message: string;
+  mediaType: string;
+  mediaUrl: string | null;
+  thumbnailUrl: string | null;
+}): Promise<{
+  imageUrls: string[];
+  source: string;
+  reason: string;
+  evidence: ModalityInputEvidence;
+}> {
+  const mediaType = normalizeText(input.mediaType).toUpperCase();
+  const mediaUrl = normalizeText(input.mediaUrl);
+
+  if (mediaType.includes("VIDEO") && /^https?:\/\//i.test(mediaUrl)) {
+    const extraction = await extractRepresentativeVideoFrames(mediaUrl);
+    if (extraction.frameDataUrls.length >= 2) {
+      return {
+        imageUrls: extraction.frameDataUrls,
+        source: "VIDEO_TEMPORAL_FRAMES",
+        reason: `${extraction.frameDataUrls.length} frames extracted from the actual video`,
+        evidence: {
+          captionAnalyzed: Boolean(normalizeText(input.message)),
+          contextAnalyzed: true,
+          visualSource: "VIDEO_TEMPORAL_FRAMES",
+          imageCount: extraction.frameDataUrls.length,
+          actualVideoAnalyzed: true,
+          videoFrameCount: extraction.frameDataUrls.length,
+          videoExtractionMethod: extraction.method,
+          fallbackReason: null,
+        },
+      };
+    }
+
+    const fallback = resolveVisualInput(input);
+    return {
+      imageUrls: fallback.imageUrl ? [fallback.imageUrl] : [],
+      source: "VIDEO_THUMBNAIL_FALLBACK",
+      reason: extraction.error || "VIDEO_FRAME_EXTRACTION_FAILED",
+      evidence: {
+        captionAnalyzed: Boolean(normalizeText(input.message)),
+        contextAnalyzed: true,
+        visualSource: "VIDEO_THUMBNAIL_FALLBACK",
+        imageCount: fallback.imageUrl ? 1 : 0,
+        actualVideoAnalyzed: false,
+        videoFrameCount: 0,
+        videoExtractionMethod: extraction.method,
+        fallbackReason: extraction.error || "VIDEO_FRAME_EXTRACTION_FAILED",
+      },
+    };
+  }
+
+  const visual = resolveVisualInput(input);
+  return {
+    imageUrls: visual.imageUrl ? [visual.imageUrl] : [],
+    source: visual.source,
+    reason: visual.reason,
+    evidence: {
+      captionAnalyzed: Boolean(normalizeText(input.message)),
+      contextAnalyzed: true,
+      visualSource: visual.source,
+      imageCount: visual.imageUrl ? 1 : 0,
+      actualVideoAnalyzed: false,
+      videoFrameCount: 0,
+      videoExtractionMethod: null,
+      fallbackReason: visual.imageUrl ? null : "NO_VISUAL_URL",
+    },
+  };
+}
+
 function normalizeText(
   value?: string | null,
 ): string {
@@ -995,6 +1084,21 @@ function parseAnalysisOutput(
         raw.weaknesses,
       ),
 
+    visibleText:
+      stringArrayValue(
+        raw.visibleText,
+      ),
+
+    visualObservations:
+      stringArrayValue(
+        raw.visualObservations,
+      ),
+
+    contextObservations:
+      stringArrayValue(
+        raw.contextObservations,
+      ),
+
     useExistingPost,
 
     darkPostEligible,
@@ -1141,6 +1245,9 @@ function parseAnalysisOutput(
 
 function buildSystemPrompt(): string {
   return [
+    "For VIDEO, analyze every supplied temporal frame together with the caption; a cover thumbnail alone is not the video.",
+    "Transcribe all legible text visible in supplied images or video frames into visibleText. Use an empty array only when no text is visible.",
+    "Return concrete visualObservations and contextObservations so every modality can be audited independently of the score.",
     "คุณคือ Senior Meta Ads Creative Analyst ของธุรกิจ 80t-shirt ในประเทศไทย",
     "วิเคราะห์โพสต์เพื่อประเมินโอกาสสร้างยอดขายผ่านแชตและโฆษณา Meta",
     "ต้องแยกประเภทสินค้าเป็น COTTON_DTF, DTG, PRINTED_SHIRT, APRON, STICKER หรือ UNKNOWN",
@@ -1228,6 +1335,9 @@ function buildUserPrompt(input: {
           "",
         reasons: [],
         weaknesses: [],
+        visibleText: [],
+        visualObservations: [],
+        contextObservations: [],
         useExistingPost:
           true,
         darkPostEligible:
@@ -1338,6 +1448,7 @@ async function analyzeWithOpenAI(input: {
   analysis: AnalysisOutput;
   modelName: string;
   rawJson: string;
+  inputEvidence: ModalityInputEvidence;
 }> {
   const apiKey =
     normalizeText(
@@ -1366,7 +1477,9 @@ async function analyzeWithOpenAI(input: {
   }
 
   const visualInput =
-    resolveVisualInput({
+    await prepareModalityInput({
+      message:
+        input.message,
       mediaType:
         input.mediaType,
 
@@ -1406,18 +1519,15 @@ async function analyzeWithOpenAI(input: {
 
     if (
       includeImage &&
-      visualInput.imageUrl
+      visualInput.imageUrls.length > 0
     ) {
-      content.push({
-        type:
-          "input_image",
-
-        image_url:
-          visualInput.imageUrl,
-
-        detail:
-          "high",
-      });
+      content.push(
+        ...visualInput.imageUrls.map((imageUrl) => ({
+          type: "input_image",
+          image_url: imageUrl,
+          detail: "high",
+        })),
+      );
     }
 
     return content;
@@ -1493,18 +1603,21 @@ async function analyzeWithOpenAI(input: {
   let apiResult =
     await callResponsesApi(
       Boolean(
-        visualInput.imageUrl,
+        visualInput.imageUrls.length > 0,
       ),
     );
+  let acceptedVisualInput =
+    visualInput.imageUrls.length > 0;
 
   if (
     !apiResult.response.ok &&
-    visualInput.imageUrl
+    visualInput.imageUrls.length > 0
   ) {
     apiResult =
       await callResponsesApi(
         false,
       );
+    acceptedVisualInput = false;
   }
 
   const response =
@@ -1559,7 +1672,29 @@ async function analyzeWithOpenAI(input: {
 
         output:
           parsed,
+
+        inputEvidence:
+          acceptedVisualInput
+            ? visualInput.evidence
+            : {
+                ...visualInput.evidence,
+                imageCount: 0,
+                actualVideoAnalyzed: false,
+                videoFrameCount: 0,
+                fallbackReason: "OPENAI_VISUAL_INPUT_REJECTED",
+              },
       }),
+
+    inputEvidence:
+      acceptedVisualInput
+        ? visualInput.evidence
+        : {
+            ...visualInput.evidence,
+            imageCount: 0,
+            actualVideoAnalyzed: false,
+            videoFrameCount: 0,
+            fallbackReason: "OPENAI_VISUAL_INPUT_REJECTED",
+          },
   };
 }
 
@@ -1568,6 +1703,7 @@ async function queuePendingContent(input: {
   pageId?: string;
   productCategory?: string;
   forceReanalyze?: boolean;
+  modalityV2Only?: boolean;
 }): Promise<number> {
   let cursor: string | undefined;
   let queued = 0;
@@ -1591,6 +1727,19 @@ async function queuePendingContent(input: {
           ? {
               productCategory:
                 input.productCategory,
+            }
+          : {}),
+
+        ...(input.modalityV2Only
+          ? {
+              OR: [
+                { analysis: null },
+                {
+                  analysis: {
+                    modalityAnalysisVersion: { lt: 2 },
+                  },
+                },
+              ],
             }
           : {}),
 
@@ -2159,7 +2308,7 @@ async function processQueueItem(input: {
                 openAIResult.modelName,
 
               promptVersion:
-                "content-analysis-worker-v3",
+                "content-analysis-worker-v4-multimodal",
 
               analysisVersion: {
                 increment:
@@ -2229,6 +2378,20 @@ async function processQueueItem(input: {
 
               rawAnalysisJson:
                 openAIResult.rawJson,
+
+              inputEvidenceJson:
+                safeStringify(openAIResult.inputEvidence),
+
+              visibleTextJson:
+                safeStringify(analysis.visibleText),
+
+              visualObservationsJson:
+                safeStringify(analysis.visualObservations),
+
+              contextObservationsJson:
+                safeStringify(analysis.contextObservations),
+
+              modalityAnalysisVersion: 2,
             },
 
             create: {
@@ -2239,7 +2402,7 @@ async function processQueueItem(input: {
                 openAIResult.modelName,
 
               promptVersion:
-                "content-analysis-worker-v3",
+                "content-analysis-worker-v4-multimodal",
 
               analysisVersion:
                 1,
@@ -2307,6 +2470,20 @@ async function processQueueItem(input: {
 
               rawAnalysisJson:
                 openAIResult.rawJson,
+
+              inputEvidenceJson:
+                safeStringify(openAIResult.inputEvidence),
+
+              visibleTextJson:
+                safeStringify(analysis.visibleText),
+
+              visualObservationsJson:
+                safeStringify(analysis.visualObservations),
+
+              contextObservationsJson:
+                safeStringify(analysis.contextObservations),
+
+              modalityAnalysisVersion: 2,
             },
           });
 
@@ -2826,6 +3003,9 @@ export async function runContentAnalysisWorker(
 
           forceReanalyze:
             options.forceReanalyze,
+
+          modalityV2Only:
+            options.modalityV2Only,
         });
 
   const results:
