@@ -335,6 +335,13 @@ export default function ContentIntelligenceControlCenter() {
 
         <div className="flex flex-wrap gap-3">
           <Link
+            href="/marketing/content-intelligence/auto-run"
+            className="inline-flex h-11 items-center gap-2 rounded-2xl border border-violet-200 bg-violet-50 px-4 text-xs font-semibold text-violet-700 shadow-sm"
+          >
+            <Clock3 size={15} />
+            Auto-Run Scheduler
+          </Link>
+          <Link
             href="/marketing/content-intelligence/coverage"
             className="inline-flex h-11 items-center gap-2 rounded-2xl border border-teal-200 bg-teal-50 px-4 text-xs font-semibold text-teal-700 shadow-sm"
           >
