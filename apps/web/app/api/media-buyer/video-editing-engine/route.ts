@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 
-import { planVideoEdit, VIDEO_EDITING_ENGINE_VERSION, type VideoEditPlanInput } from "@/lib/media-buyer/video-editing-engine";
+import { listVideoEditingCandidates, planVideoEdit, VIDEO_EDITING_ENGINE_VERSION, type VideoEditPlanInput } from "@/lib/media-buyer/video-editing-engine";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  return NextResponse.json({ ok: true, engine: VIDEO_EDITING_ENGINE_VERSION, mode: "PLAN_ONLY", safety: { mediaRendered: false, ownerApprovalRequired: true, metaMutationExecuted: false, realSpendUsed: false } });
+  return NextResponse.json({ ok: true, engine: VIDEO_EDITING_ENGINE_VERSION, mode: "PLAN_AND_REVIEW", candidates: await listVideoEditingCandidates(), safety: { mediaRendered: false, ownerApprovalRequired: true, metaMutationExecuted: false, realSpendUsed: false } });
 }
 
 export async function POST(request: Request) {

@@ -34,20 +34,30 @@ export async function createPausedCanary(input: {
   trafficPercent?: number;
   minimumSpendSatang?: number;
 }) {
-  const draft = await prisma.campaignDraft.findUnique({ where: { id: input.campaignDraftId }, select: { id: true, status: true } });
+  const name = input.name?.normalize("NFKC").trim().slice(0, 120);
+  const hypothesis = input.hypothesis?.normalize("NFKC").trim().slice(0, 500);
+  if (!name || !hypothesis) throw new Error("ต้องระบุชื่อ Experiment และสมมติฐาน");
+
+  const draft = await prisma.campaignDraft.findUnique({ where: { id: input.campaignDraftId }, select: { id: true, pageId: true, status: true } });
   if (!draft) throw new Error("ไม่พบ Campaign Draft");
   if (input.controlCreativeRevisionId === input.challengerCreativeRevisionId) throw new Error("Control และ Challenger ต้องเป็นคนละ Revision");
 
-  const revisions = await prisma.creativeRevision.count({ where: { id: { in: [input.controlCreativeRevisionId, input.challengerCreativeRevisionId] }, status: "READY_FOR_APPROVAL" } });
-  if (revisions !== 2) throw new Error("Revision ทั้งสองรายการต้องอยู่ในสถานะ READY_FOR_APPROVAL");
+  const revisions = await prisma.creativeRevision.findMany({
+    where: { id: { in: [input.controlCreativeRevisionId, input.challengerCreativeRevisionId] }, status: "READY_FOR_APPROVAL" },
+    select: { id: true, creativeAsset: { select: { pageId: true } } },
+  });
+  if (revisions.length !== 2) throw new Error("Revision ทั้งสองรายการต้องอยู่ในสถานะ READY_FOR_APPROVAL");
+  if (revisions.some((revision) => revision.creativeAsset.pageId !== draft.pageId)) {
+    throw new Error("Control และ Challenger ต้องเป็น Creative ของเพจเดียวกับ Campaign Draft");
+  }
 
   const experimentId = `exp_${crypto.randomUUID()}`;
   const createdAt = new Date().toISOString();
   const base = {
     experimentId,
     campaignDraftId: input.campaignDraftId,
-    name: input.name.normalize("NFKC").trim().slice(0, 120),
-    hypothesis: input.hypothesis.normalize("NFKC").trim().slice(0, 500),
+    name,
+    hypothesis,
     controlCreativeRevisionId: input.controlCreativeRevisionId,
     challengerCreativeRevisionId: input.challengerCreativeRevisionId,
     trafficPercent: Math.min(Math.max(Math.floor(input.trafficPercent ?? 10), 1), 25),
@@ -70,6 +80,48 @@ export async function createPausedCanary(input: {
     policyReference: "Master Spec 73",
   }});
   return record;
+}
+
+export async function getExperimentOptions() {
+  const [campaignDrafts, creativeRevisions] = await Promise.all([
+    prisma.campaignDraft.findMany({
+      where: { status: { notIn: ["CANCELLED", "FAILED"] } },
+      orderBy: { updatedAt: "desc" },
+      take: 100,
+      select: {
+        id: true,
+        pageId: true,
+        campaignName: true,
+        productCategory: true,
+        status: true,
+        page: { select: { name: true } },
+      },
+    }),
+    prisma.creativeRevision.findMany({
+      where: { status: "READY_FOR_APPROVAL", creativeAsset: { isActive: true } },
+      orderBy: { updatedAt: "desc" },
+      take: 200,
+      select: {
+        id: true,
+        version: true,
+        revisionType: true,
+        creativeAsset: { select: { pageId: true, name: true, assetType: true, page: { select: { name: true } } } },
+      },
+    }),
+  ]);
+
+  return {
+    campaignDrafts: campaignDrafts.map(({ page, ...draft }) => ({ ...draft, pageName: page.name })),
+    creativeRevisions: creativeRevisions.map((revision) => ({
+      id: revision.id,
+      version: revision.version,
+      revisionType: revision.revisionType,
+      pageId: revision.creativeAsset.pageId,
+      pageName: revision.creativeAsset.page.name,
+      assetName: revision.creativeAsset.name,
+      assetType: revision.creativeAsset.assetType,
+    })),
+  };
 }
 
 export async function listExperiments(campaignDraftId?: string) {
