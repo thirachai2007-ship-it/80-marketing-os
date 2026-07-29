@@ -675,9 +675,11 @@ export async function startContentAnalysisAutoRun(
   const plan =
     await prisma.$transaction(
       async (transaction) => {
-        await transaction.$queryRawUnsafe(
-          `SELECT pg_advisory_xact_lock(${START_ADVISORY_LOCK_KEY})`,
-        );
+        await transaction.$executeRaw`
+          SELECT pg_advisory_xact_lock(
+            ${START_ADVISORY_LOCK_KEY}::bigint
+          )
+        `;
 
         const existing =
           await transaction.mediaBuyerRun.findFirst({
