@@ -884,12 +884,13 @@ function booleanValue(
 
 function stringArrayValue(
   value: unknown,
+  fallback: string[] = [],
 ): string[] {
   if (!Array.isArray(value)) {
-    return [];
+    return fallback;
   }
 
-  return value
+  const normalized = value
     .filter(
       (item): item is string =>
         typeof item === "string",
@@ -898,6 +899,8 @@ function stringArrayValue(
       normalizeText(item),
     )
     .filter(Boolean);
+
+  return normalized.length > 0 ? normalized : fallback;
 }
 
 function objectValue(
@@ -1255,21 +1258,25 @@ function parseAnalysisOutput(
       provinces:
         stringArrayValue(
           audiencePlanRaw.provinces,
+          ["ทั่วประเทศไทย"],
         ),
 
       businessTypes:
         stringArrayValue(
           audiencePlanRaw.businessTypes,
+          ["ผู้บริโภคทั่วไป", "เจ้าของธุรกิจ"],
         ),
 
       interests:
         stringArrayValue(
           audiencePlanRaw.interests,
+          ["สินค้าพิมพ์สั่งทำ"],
         ),
 
       behaviors:
         stringArrayValue(
           audiencePlanRaw.behaviors,
+          ["ซื้อสินค้าออนไลน์", "ติดต่อร้านค้าผ่านแชต"],
         ),
 
       excludedAudiences:
