@@ -5,6 +5,7 @@ import {
 import {
   extractRepresentativeVideoFrames,
 } from "@/lib/media-buyer/video-frame-extractor";
+import { ensureThreeDarkPostCopies } from "@/lib/media-buyer/dark-post-copy-policy";
 
 export const CONTENT_ANALYSIS_WORKER_VERSION =
   "content-analysis-worker";
@@ -1292,7 +1293,8 @@ function parseAnalysisOutput(
     },
 
     darkPostCopies:
-      darkPostCopiesRaw
+      ensureThreeDarkPostCopies(
+        darkPostCopiesRaw
         .map((item) => {
           const copy =
             objectValue(item);
@@ -1340,6 +1342,8 @@ function parseAnalysisOutput(
             copy.headline,
         )
         .slice(0, 3),
+        stringValue(raw.summary),
+      ),
   };
 }
 
@@ -2836,7 +2840,7 @@ async function processQueueItem(input: {
                     copy.callToAction,
 
                   version:
-                    1,
+                    index + 1,
 
                   isSelected:
                     index === 0,
