@@ -99,9 +99,9 @@ type AutoRunData = {
 };
 
 const PLAN_OPTIONS = [
-  10,
-  25,
-  50,
+  100,
+  500,
+  2_000,
 ] as const;
 
 function number(
@@ -218,7 +218,7 @@ export default function ContentAnalysisAutoRunScheduler() {
       null,
     );
   const [approvedMaxItems, setApprovedMaxItems] =
-    useState(10);
+    useState(100);
   const [approved, setApproved] =
     useState(false);
   const [loading, setLoading] =
@@ -401,7 +401,7 @@ export default function ContentAnalysisAutoRunScheduler() {
         await callAction({
           action: "START",
           approvedMaxItems,
-          batchSize: 1,
+          batchSize: 5,
           confirmAiUsage: true,
         });
 
@@ -863,7 +863,7 @@ export default function ContentAnalysisAutoRunScheduler() {
                 สร้างแผน Auto-Run ใหม่
               </h2>
               <p className="mt-1 text-xs text-slate-500">
-                เลือกเพดานรวม ระบบใช้ Batch ปลอดภัยครั้งละ 1 รายการ
+                เลือกเพดานรวม ระบบใช้ Batch ปลอดภัยครั้งละไม่เกิน 5 รายการ และ Cron จะทำงานต่อแม้ปิดหน้านี้
               </p>
             </div>
           </div>
