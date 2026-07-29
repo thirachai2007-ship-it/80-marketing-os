@@ -9,6 +9,7 @@ import {
 import {
   Activity,
   ArrowRight,
+  ChartScatter,
   CircleGauge,
   BrainCircuit,
   CheckCircle2,
@@ -347,6 +348,13 @@ export default function ContentIntelligenceControlCenter() {
           >
             <CircleGauge size={15} />
             Coverage Planner
+          </Link>
+          <Link
+            href="/marketing/content-intelligence/correlation"
+            className="inline-flex h-11 items-center gap-2 rounded-2xl border border-indigo-200 bg-indigo-50 px-4 text-xs font-semibold text-indigo-700 shadow-sm"
+          >
+            <ChartScatter size={15} />
+            Performance Correlation
           </Link>
           <Link
             href="/marketing/content-intelligence/results"
