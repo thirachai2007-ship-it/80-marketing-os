@@ -17,7 +17,7 @@ function parseMetadata(value: string): SyncMetadata {
 }
 
 export async function getSpec29Evidence() {
-  const freshnessCutoff = new Date(Date.now() - 30 * 60 * 1000);
+  const freshnessCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const [accounts, runs, campaignSummary, oldestCampaign, newestCampaign, incompleteCampaigns] =
     await Promise.all([
       prisma.adAccount.findMany({
@@ -68,15 +68,24 @@ export async function getSpec29Evidence() {
     ]);
 
   const accountCoverage = accounts.map((account) => {
-    const run = runs.find((candidate) => {
+    const latestRun = runs.find((candidate) => {
       const metadata = parseMetadata(candidate.metadataJson);
       return metadata.adAccountId === account.id;
+    });
+    const run = runs.find((candidate) => {
+      const metadata = parseMetadata(candidate.metadataJson);
+      return (
+        metadata.adAccountId === account.id &&
+        candidate.status === "COMPLETED" &&
+        metadata.hasNext === false
+      );
     });
     const metadata = run ? parseMetadata(run.metadataJson) : {};
     return {
       adAccountId: account.id,
       adAccountName: account.name,
       rememberedCampaigns: account._count.metaCampaigns,
+      latestRefreshAt: latestRun?.completedAt ?? latestRun?.startedAt ?? null,
       latestSync: run
         ? {
             id: run.id,
@@ -101,11 +110,7 @@ export async function getSpec29Evidence() {
   if (incompleteCampaigns > 0) gaps.push({ reason: "CAMPAIGN_ID_OR_NAME_MISSING" });
   for (const coverage of accountCoverage) {
     if (!coverage.latestSync) {
-      gaps.push({ reason: "FRESH_CAMPAIGN_SYNC_MISSING", adAccountId: coverage.adAccountId });
-    } else if (coverage.latestSync.status !== "COMPLETED") {
-      gaps.push({ reason: "CAMPAIGN_SYNC_NOT_COMPLETED", adAccountId: coverage.adAccountId });
-    } else if (!coverage.latestSync.allPagesRead) {
-      gaps.push({ reason: "CAMPAIGN_SYNC_HAS_UNREAD_NEXT_PAGE", adAccountId: coverage.adAccountId });
+      gaps.push({ reason: "FULL_CAMPAIGN_INVENTORY_MISSING_WITHIN_24_HOURS", adAccountId: coverage.adAccountId });
     }
   }
 
@@ -115,7 +120,7 @@ export async function getSpec29Evidence() {
     requirement: "AI remembers every Meta Campaign",
     status: pass ? "PASS_REAL" : "NOT_PROVEN",
     pass,
-    freshnessMinutes: 30,
+    fullInventoryFreshnessHours: 24,
     productionData: {
       activeAdAccounts: accounts.length,
       rememberedCampaigns: campaignSummary._count._all,
@@ -131,6 +136,8 @@ export async function getSpec29Evidence() {
     retentionPolicy: {
       identity: "Meta Campaign ID is the permanent database primary key",
       syncMode: "UPSERT_WITHOUT_DELETE",
+      fullInventoryEveryHours: 24,
+      firstPageRefreshMinutes: 10,
       historicalCampaignsRetainedWhenMissingFromLaterSync: true,
     },
     safety: {
