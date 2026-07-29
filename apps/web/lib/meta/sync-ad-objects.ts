@@ -384,12 +384,16 @@ export async function syncMetaAdObjects({
   after,
   metaConnectionId,
   trigger = "MANUAL",
+  sweepId,
+  sweepPage,
 }: {
   adAccountId: string;
   resource: MetaAdObjectResource;
   after?: string;
   metaConnectionId?: string;
   trigger?: string;
+  sweepId?: string;
+  sweepPage?: number;
 }) {
   const connection =
     metaConnectionId
@@ -426,6 +430,8 @@ export async function syncMetaAdObjects({
       startedAt: new Date(),
       metadataJson: JSON.stringify({
         adAccountId,
+        sweepId: sweepId || null,
+        sweepPage: sweepPage ?? null,
       }),
     },
   });
@@ -561,6 +567,8 @@ export async function syncMetaAdObjects({
           adAccountName: account.name,
           resource,
           hasNext,
+          sweepId: sweepId || null,
+          sweepPage: sweepPage ?? null,
         }),
       },
     });

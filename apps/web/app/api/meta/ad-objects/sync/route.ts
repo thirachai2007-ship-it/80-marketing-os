@@ -35,6 +35,8 @@ export async function POST(
       request.nextUrl.searchParams
         .get("after")
         ?.trim();
+    const sweepId = request.nextUrl.searchParams.get("sweepId")?.trim();
+    const parsedSweepPage = Number(request.nextUrl.searchParams.get("sweepPage"));
 
     if (
       !adAccountId ||
@@ -59,6 +61,11 @@ export async function POST(
         resource:
           resource as MetaAdObjectResource,
         after: after || undefined,
+        sweepId: sweepId || undefined,
+        sweepPage:
+          Number.isInteger(parsedSweepPage) && parsedSweepPage > 0
+            ? parsedSweepPage
+            : undefined,
       }),
     );
   } catch (error) {
