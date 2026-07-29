@@ -229,6 +229,7 @@ function decide(input: {
   orders: number;
   minimumSpendSatang: number;
   minimumOrders: number;
+  optimizationAttempts: number;
 }): {
   decision: AudiencePerformanceDecision;
   confidence: number;
@@ -287,7 +288,11 @@ function decide(input: {
     };
   }
 
-  if (input.netProfitSatang < 0 && input.score <= 35) {
+  if (
+    input.netProfitSatang < 0 &&
+    input.score <= 35 &&
+    input.optimizationAttempts >= 1
+  ) {
     return {
       decision: "PAUSE_CANDIDATE",
       confidence: 85,
@@ -318,6 +323,7 @@ export function evaluateAudiencePausePolicy(input: {
   orders: number;
   minimumSpendSatang: number;
   minimumOrders: number;
+  optimizationAttempts: number;
 }) {
   return decide(input);
 }
@@ -687,6 +693,33 @@ export async function evaluateAudiencePerformance(
 
   const derived = calculateMetrics(totals);
 
+  const relatedContents =
+    asset.pageId && asset.productCategory
+      ? await prisma.pageContent.findMany({
+          where: {
+            pageId: asset.pageId,
+            productCategory: asset.productCategory,
+          },
+          select: { id: true },
+        })
+      : [];
+  const optimizationAttempts = relatedContents.length > 0
+    ? await prisma.decisionLog.count({
+        where: {
+          decisionType: "CREATIVE_OPTIMIZATION_V3",
+          action: {
+            in: [
+              "OPTIMIZE_COPY",
+              "OPTIMIZE_IMAGE",
+              "OPTIMIZE_VIDEO",
+              "OPTIMIZE_MIXED",
+            ],
+          },
+          contentId: { in: relatedContents.map((item) => item.id) },
+        },
+      })
+    : 0;
+
   const score = calculateScore({
     spendSatang: totals.spendSatang,
     netProfitSatang: totals.netProfitSatang,
@@ -704,6 +737,7 @@ export async function evaluateAudiencePerformance(
     orders: totals.orders,
     minimumSpendSatang,
     minimumOrders,
+    optimizationAttempts,
   });
 
   let oldMetadata: Record<string, unknown> = {};
@@ -728,6 +762,7 @@ export async function evaluateAudiencePerformance(
           decision: evaluation.decision,
           confidence: evaluation.confidence,
           recommendedActions: evaluation.recommendedActions,
+          optimizationAttempts,
           metrics: {
             impressions: totals.impressions,
             reach: totals.reach,
@@ -755,6 +790,7 @@ export async function evaluateAudiencePerformance(
       minimumSpendSatang,
       minimumOrders,
       recordCount: asset.performances.length,
+      optimizationAttempts,
     },
     outputJson: {
       score,
