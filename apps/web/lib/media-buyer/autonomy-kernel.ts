@@ -20,13 +20,48 @@ const ANALYSIS_BATCH_SIZE = 3;
 const CAMPAIGN_BATCH_SIZE = 5;
 const STALE_KERNEL_MS = 9 * 60 * 1000;
 const TRACKING_ACCOUNT_CONCURRENCY = 2;
+const MAXIMUM_CAMPAIGN_PAGES_PER_ACCOUNT = 50;
+
+async function syncAllCampaignPages(account: {
+  id: string;
+  metaConnectionId: string | null;
+}) {
+  const results: Awaited<ReturnType<typeof syncMetaAdObjects>>[] = [];
+  const seenCursors = new Set<string>();
+  let after: string | undefined;
+
+  for (let page = 1; page <= MAXIMUM_CAMPAIGN_PAGES_PER_ACCOUNT; page += 1) {
+    const result = await syncMetaAdObjects({
+      adAccountId: account.id,
+      metaConnectionId: account.metaConnectionId ?? undefined,
+      resource: "campaigns",
+      after,
+      trigger: "SCHEDULED_AUTONOMY",
+    });
+    results.push(result);
+
+    if (!result.hasNext) return results;
+    if (!result.nextCursor || seenCursors.has(result.nextCursor)) {
+      throw new Error(`Campaign pagination cursor stalled for ${account.id}`);
+    }
+    seenCursors.add(result.nextCursor);
+    after = result.nextCursor;
+  }
+
+  throw new Error(
+    `Campaign pagination exceeded ${MAXIMUM_CAMPAIGN_PAGES_PER_ACCOUNT} pages for ${account.id}`,
+  );
+}
 
 async function trackAdAccount(account: {
   id: string;
   metaConnectionId: string | null;
 }) {
-  const results = [];
-  for (const resource of ["campaigns", "adsets", "ads"] as const) {
+  const results: Array<
+    | Awaited<ReturnType<typeof syncMetaAdObjects>>
+    | Awaited<ReturnType<typeof syncMetaInsights>>
+  > = await syncAllCampaignPages(account);
+  for (const resource of ["adsets", "ads"] as const) {
     results.push(await syncMetaAdObjects({
       adAccountId: account.id,
       metaConnectionId: account.metaConnectionId ?? undefined,
