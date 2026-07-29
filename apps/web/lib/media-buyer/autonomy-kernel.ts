@@ -19,6 +19,29 @@ const BACKFILL_PAGE_LIMIT = 5;
 const ANALYSIS_BATCH_SIZE = 3;
 const CAMPAIGN_BATCH_SIZE = 5;
 const STALE_KERNEL_MS = 9 * 60 * 1000;
+const TRACKING_ACCOUNT_CONCURRENCY = 2;
+
+async function trackAdAccount(account: {
+  id: string;
+  metaConnectionId: string | null;
+}) {
+  const results = [];
+  for (const resource of ["campaigns", "adsets", "ads"] as const) {
+    results.push(await syncMetaAdObjects({
+      adAccountId: account.id,
+      metaConnectionId: account.metaConnectionId ?? undefined,
+      resource,
+      trigger: "SCHEDULED_AUTONOMY",
+    }));
+  }
+  results.push(await syncMetaInsights({
+    adAccountId: account.id,
+    metaConnectionId: account.metaConnectionId ?? undefined,
+    datePreset: "last_7d",
+    trigger: "SCHEDULED_AUTONOMY",
+  }));
+  return results;
+}
 
 export async function runAutomaticAdTracking() {
   const accounts = await prisma.adAccount.findMany({
@@ -27,23 +50,17 @@ export async function runAutomaticAdTracking() {
     select: { id: true, metaConnectionId: true },
   });
   const results = [];
-  for (const account of accounts) {
-    for (const resource of ["campaigns", "adsets", "ads"] as const) {
-      results.push(await syncMetaAdObjects({
-        adAccountId: account.id,
-        metaConnectionId: account.metaConnectionId ?? undefined,
-        resource,
-        trigger: "SCHEDULED_AUTONOMY",
-      }));
-    }
-    results.push(await syncMetaInsights({
-      adAccountId: account.id,
-      metaConnectionId: account.metaConnectionId ?? undefined,
-      datePreset: "last_7d",
-      trigger: "SCHEDULED_AUTONOMY",
-    }));
+  for (let start = 0; start < accounts.length; start += TRACKING_ACCOUNT_CONCURRENCY) {
+    const batch = accounts.slice(start, start + TRACKING_ACCOUNT_CONCURRENCY);
+    const batchResults = await Promise.all(batch.map(trackAdAccount));
+    results.push(...batchResults.flat());
   }
-  return { trackedAccounts: accounts.length, syncOperations: results.length, results };
+  return {
+    trackedAccounts: accounts.length,
+    accountConcurrency: TRACKING_ACCOUNT_CONCURRENCY,
+    syncOperations: results.length,
+    results,
+  };
 }
 
 type StepResult = {
