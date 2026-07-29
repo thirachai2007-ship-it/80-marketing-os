@@ -327,6 +327,7 @@ export async function syncMetaPosts({
       status: "RUNNING",
       trigger,
       cursor: after || null,
+      metadataJson: JSON.stringify({ pageId }),
       startedAt: new Date(),
     },
   });
