@@ -5,6 +5,7 @@ import {
   type CandidateProductCategory,
   type SelectedCampaignCandidate,
 } from "@/lib/media-buyer/candidate-selector";
+import { resolveFallbackCreativeMode } from "@/lib/media-buyer/content-fallback-policy";
 
 import prisma from "@/lib/prisma";
 
@@ -322,6 +323,9 @@ function buildAdFingerprint(input: {
 function chooseCreativeMode(
   candidate: SelectedCampaignCandidate,
 ): string {
+  if (candidate.selectionMode === "WINNING_FALLBACK") {
+    return resolveFallbackCreativeMode(candidate.selectionMode, "EXISTING_POST");
+  }
   if (
     candidate.analysis
       .recommendation ===

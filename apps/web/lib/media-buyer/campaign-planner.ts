@@ -4,6 +4,11 @@ import {
   type CampaignPriorityBreakdown,
 } from "@/lib/media-buyer/campaign-priority";
 import prisma from "@/lib/prisma";
+import { getContentAnalysisCutoff } from "@/lib/media-buyer/content-analysis-policy";
+import {
+  chooseFreshOrWinningFallback,
+  resolveFallbackCreativeMode,
+} from "@/lib/media-buyer/content-fallback-policy";
 
 const PLANNER_VERSION = "campaign-planner-v2";
 
@@ -184,7 +189,11 @@ function chooseObjective(
 
 function getCreativeMode(
   candidate: CampaignCandidate,
+  fallbackMode = false,
 ): string {
+  if (fallbackMode) {
+    return resolveFallbackCreativeMode("WINNING_FALLBACK", "EXISTING_POST");
+  }
   if (
     candidate.analysis
       .recommendation ===
@@ -516,6 +525,7 @@ async function planPageProduct(input: {
         pageId: page.id,
         productCategory,
         analysisStatus: "COMPLETED",
+        createdTime: { gte: getContentAnalysisCutoff() },
 
         analysis: {
           is: {
@@ -671,8 +681,13 @@ async function planPageProduct(input: {
     },
   );
 
+  const candidatePool = chooseFreshOrWinningFallback(
+    rankedCandidates,
+    useOldWinningContent,
+  );
+
   const selectedCandidates =
-    rankedCandidates.slice(
+    candidatePool.candidates.slice(
       0,
       maximumAds,
     );
@@ -776,7 +791,10 @@ async function planPageProduct(input: {
             selectedCandidates[index];
 
           const creativeMode =
-            getCreativeMode(candidate);
+            getCreativeMode(
+              candidate,
+              candidatePool.mode === "WINNING_FALLBACK",
+            );
 
           await tx.campaignDraftAd.create({
             data: {
