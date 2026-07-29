@@ -7,7 +7,10 @@ import { promisify } from "node:util";
 import ffmpegPath from "ffmpeg-static";
 
 const execFileAsync = promisify(execFile);
-const DEFAULT_MAX_VIDEO_BYTES = 25 * 1024 * 1024;
+// Meta source videos in the 45-day window include a 27 MB asset.
+// Keep a bounded margin below the 50 MB hard ceiling so that it can be
+// analyzed without turning the worker into an unbounded downloader.
+const DEFAULT_MAX_VIDEO_BYTES = 35 * 1024 * 1024;
 const DEFAULT_TIMEOUT_MS = 45_000;
 const FRAME_COUNT = 4;
 
