@@ -56,6 +56,7 @@ export type RunContentAnalysisWorkerOptions = {
   batchSize?: number;
   pageId?: string;
   productCategory?: string;
+  mediaType?: string;
   forceReanalyze?: boolean;
   queuePendingContent?: boolean;
   modalityV2Only?: boolean;
@@ -1702,6 +1703,7 @@ async function queuePendingContent(input: {
   batchSize: number;
   pageId?: string;
   productCategory?: string;
+  mediaType?: string;
   forceReanalyze?: boolean;
   modalityV2Only?: boolean;
 }): Promise<number> {
@@ -1727,6 +1729,12 @@ async function queuePendingContent(input: {
           ? {
               productCategory:
                 input.productCategory,
+            }
+          : {}),
+
+        ...(input.mediaType
+          ? {
+              mediaType: normalizeText(input.mediaType).toUpperCase(),
             }
           : {}),
 
@@ -3000,6 +3008,9 @@ export async function runContentAnalysisWorker(
 
           productCategory:
             options.productCategory,
+
+          mediaType:
+            options.mediaType,
 
           forceReanalyze:
             options.forceReanalyze,
