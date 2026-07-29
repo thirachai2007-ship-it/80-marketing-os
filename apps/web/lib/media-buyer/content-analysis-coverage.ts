@@ -258,7 +258,7 @@ export async function getContentAnalysisCoverage() {
     coverageVersion:
       CONTENT_ANALYSIS_COVERAGE_VERSION,
     strategy:
-      "ROLLING_90_DAYS_LOWEST_COVERAGE_RATIO",
+      `ROLLING_${CONTENT_ANALYSIS_RECENCY_DAYS}_DAYS_LOWEST_COVERAGE_RATIO`,
     window: {
       days:
         CONTENT_ANALYSIS_RECENCY_DAYS,
