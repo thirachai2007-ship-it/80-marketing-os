@@ -7,6 +7,10 @@ import {
   META_PUBLISH_ORCHESTRATOR_VERSION,
   orchestrateMetaPublish,
 } from "@/lib/media-buyer/meta-publish-orchestrator";
+import {
+  hasValidOwnerSession,
+  isSameOriginRequest,
+} from "@/lib/owner-session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -242,6 +246,25 @@ export async function GET() {
 export async function POST(
   request: NextRequest,
 ) {
+  if (
+    !hasValidOwnerSession(request) ||
+    !isSameOriginRequest(request)
+  ) {
+    return NextResponse.json(
+      {
+        ok: false,
+        authenticated: false,
+        ownerApprovalRequired: true,
+        metaMutationExecuted: false,
+        createdInMetaPaused: false,
+        campaignPublished: false,
+        realSpendUsed: false,
+        error: "Owner authentication required",
+      },
+      { status: 401 },
+    );
+  }
+
   const requestId =
     crypto.randomUUID();
 
