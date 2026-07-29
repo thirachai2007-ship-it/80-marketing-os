@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma";
+import { syncAllMetaPosts } from "@/lib/meta/sync-posts";
 
 import { runContentAdLinkageBackfillBatch } from "@/lib/media-buyer/content-ad-linkage-backfill";
 import { runBalancedAnalysisBatch } from "@/lib/media-buyer/content-analysis-coverage";
@@ -193,6 +194,12 @@ export async function runAutonomyKernel() {
 
   try {
     const steps: StepResult[] = [];
+
+    steps.push(
+      await runStep("META_POST_SYNC", () =>
+        syncAllMetaPosts(),
+      ),
+    );
 
     steps.push(await resumeBackfill());
 

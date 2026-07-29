@@ -312,9 +312,11 @@ async function syncPagePosts(
 export async function syncMetaPosts({
   pageId,
   after,
+  trigger = "MANUAL",
 }: {
   pageId: string;
   after?: string;
+  trigger?: "MANUAL" | "SCHEDULED";
 }) {
   const connection =
     await getActiveMetaConnection();
@@ -323,7 +325,7 @@ export async function syncMetaPosts({
       metaConnectionId: connection.id,
       resourceType: "POSTS",
       status: "RUNNING",
-      trigger: "MANUAL",
+      trigger,
       cursor: after || null,
       startedAt: new Date(),
     },
@@ -401,4 +403,58 @@ export async function syncMetaPosts({
 
     throw error;
   }
+}
+
+export async function syncAllMetaPosts() {
+  const connection = await getActiveMetaConnection();
+  const pages = await getActiveMetaPagesWithTokens(connection.id);
+  const results: Array<
+    | Awaited<ReturnType<typeof syncMetaPosts>>
+    | { ok: false; pageId: string; pageName: string; error: string }
+  > = [];
+
+  for (const page of pages) {
+    try {
+      results.push(await syncMetaPosts({ pageId: page.id, trigger: "SCHEDULED" }));
+    } catch (error) {
+      results.push({
+        ok: false,
+        pageId: page.id,
+        pageName: page.name,
+        error: error instanceof Error ? error.message : "Meta post sync failed",
+      });
+    }
+  }
+
+  const successful = results.filter((result) => result.ok).length;
+  const failed = results.length - successful;
+
+  const summary = {
+    ok: failed === 0,
+    trigger: "SCHEDULED" as const,
+    pagesAttempted: pages.length,
+    pagesSucceeded: successful,
+    pagesFailed: failed,
+    postsFound: results.reduce(
+      (total, result) => total + ("postsFound" in result ? result.postsFound : 0),
+      0,
+    ),
+    postsCreated: results.reduce(
+      (total, result) => total + ("postsCreated" in result ? result.postsCreated : 0),
+      0,
+    ),
+    postsUpdated: results.reduce(
+      (total, result) => total + ("postsUpdated" in result ? result.postsUpdated : 0),
+      0,
+    ),
+    results,
+  };
+
+  if (failed > 0) {
+    throw new Error(
+      `Scheduled Meta post sync failed for ${failed}/${pages.length} pages: ${JSON.stringify(summary)}`,
+    );
+  }
+
+  return summary;
 }
