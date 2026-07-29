@@ -177,7 +177,8 @@ export async function getContentAnalysisCoverage() {
     coverage
       .filter(
         (item) =>
-          item.queueReady > 0,
+          item.queueReady > 0 ||
+          item.pending > 0,
       )
       .sort(
         (left, right) =>
@@ -233,6 +234,9 @@ export async function getContentAnalysisCoverage() {
         completed:
           result.completed +
           item.completed,
+        pending:
+          result.pending +
+          item.pending,
         queueReady:
           result.queueReady +
           item.queueReady,
@@ -248,6 +252,7 @@ export async function getContentAnalysisCoverage() {
         totalPosts: 0,
         fingerprinted: 0,
         completed: 0,
+        pending: 0,
         queueReady: 0,
         queueProcessing: 0,
         queueFailed: 0,
