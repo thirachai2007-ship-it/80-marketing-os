@@ -565,7 +565,10 @@ export async function backfillUnknownProductCategories() {
   });
 
   if (updates.length > 0) {
-    await prisma.$transaction(updates);
+    // Each update is idempotent and independent. Avoid a single transaction:
+    // the production database has a five-second transaction lifetime, while a
+    // full 45-day repair can legitimately contain dozens of rows.
+    await Promise.all(updates);
   }
 
   return {
