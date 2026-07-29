@@ -5,6 +5,10 @@
     {
       "path": "/api/cron/autonomy-kernel",
       "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/cron/content-analysis",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

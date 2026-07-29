@@ -4,8 +4,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import {
+  Beaker,
   Bot,
   Boxes,
+  BrainCircuit,
   ChevronRight,
   ShieldCheck,
   Settings,
@@ -35,6 +37,26 @@ const menuGroups: MenuGroup[] = [
         title: "Approval Center",
         href: "/",
         icon: ShieldCheck,
+      },
+    ],
+  },
+  {
+    title: "OPERATIONS",
+    items: [
+      {
+        title: "Content Intelligence",
+        href: "/marketing/content-intelligence",
+        icon: BrainCircuit,
+      },
+      {
+        title: "Experiments",
+        href: "/marketing/experiments",
+        icon: Beaker,
+      },
+      {
+        title: "Settings",
+        href: "/settings/meta",
+        icon: Settings,
       },
     ],
   },
