@@ -50,7 +50,13 @@ export async function getSpec03Evidence() {
     },
   });
 
-  const gaps: Array<{ contentId: string; mediaType: string; reasons: string[] }> = [];
+  const gaps: Array<{
+    contentId: string;
+    mediaType: string;
+    reasons: string[];
+    fallbackReason?: string;
+    visualSource?: string;
+  }> = [];
   const counts = {
     total: contents.length,
     analyzedV2: 0,
@@ -112,7 +118,18 @@ export async function getSpec03Evidence() {
     }
 
     if (reasons.length > 0) {
-      gaps.push({ contentId: content.id, mediaType: content.mediaType, reasons });
+      const evidence = analysis ? parseObject(analysis.inputEvidenceJson) : {};
+      gaps.push({
+        contentId: content.id,
+        mediaType: content.mediaType,
+        reasons,
+        ...(typeof evidence.fallbackReason === "string"
+          ? { fallbackReason: evidence.fallbackReason }
+          : {}),
+        ...(typeof evidence.visualSource === "string"
+          ? { visualSource: evidence.visualSource }
+          : {}),
+      });
     }
   }
 
