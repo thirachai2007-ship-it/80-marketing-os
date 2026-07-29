@@ -32,6 +32,13 @@ type QueueResponse = {
   error?: string;
 };
 
+type SessionResponse = {
+  ok: boolean;
+  authenticated: boolean;
+  configured?: boolean;
+  error?: string;
+};
+
 function baht(satang: number) {
   return new Intl.NumberFormat("th-TH", {
     style: "currency",
@@ -41,6 +48,10 @@ function baht(satang: number) {
 }
 
 export default function OwnerApprovalCenter() {
+  const [session, setSession] =
+    useState<SessionResponse | null>(null);
+  const [ownerKey, setOwnerKey] = useState("");
+  const [signingIn, setSigningIn] = useState(false);
   const [data, setData] = useState<QueueResponse | null>(null);
   const [error, setError] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -70,13 +81,147 @@ export default function OwnerApprovalCenter() {
   }, []);
 
   useEffect(() => {
-    const initial = window.setTimeout(() => void load(), 0);
-    const timer = window.setInterval(() => void load(), 60_000);
+    const initial = window.setTimeout(async () => {
+      try {
+        const response = await fetch(
+          "/api/owner-session",
+          { cache: "no-store" },
+        );
+        const result =
+          (await response.json()) as SessionResponse;
+        setSession(result);
+
+        if (result.authenticated) {
+          await load();
+        }
+      } catch {
+        setSession({
+          ok: false,
+          authenticated: false,
+          error: "ตรวจสอบ Owner Session ไม่สำเร็จ",
+        });
+      }
+    }, 0);
     return () => {
       window.clearTimeout(initial);
-      window.clearInterval(timer);
     };
   }, [load]);
+
+  useEffect(() => {
+    if (!session?.authenticated) {
+      return;
+    }
+
+    const timer = window.setInterval(
+      () => void load(),
+      60_000,
+    );
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [load, session?.authenticated]);
+
+  async function signIn() {
+    setSigningIn(true);
+    setError("");
+
+    try {
+      const response = await fetch(
+        "/api/owner-session",
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ ownerKey }),
+        },
+      );
+      const result =
+        (await response.json()) as SessionResponse;
+
+      if (!response.ok || !result.authenticated) {
+        throw new Error(
+          result.error || "เข้าสู่ระบบไม่สำเร็จ",
+        );
+      }
+
+      setOwnerKey("");
+      setSession(result);
+      await load();
+    } catch (signInError) {
+      setError(
+        signInError instanceof Error
+          ? signInError.message
+          : "เข้าสู่ระบบไม่สำเร็จ",
+      );
+    } finally {
+      setSigningIn(false);
+    }
+  }
+
+  if (session && !session.authenticated) {
+    return (
+      <section className="mx-auto max-w-md py-12">
+        <div className="rounded-3xl border border-slate-200 bg-white p-7 shadow-sm">
+          <ShieldCheck
+            className="text-teal-600"
+            size={34}
+          />
+          <h1 className="mt-4 text-2xl font-bold text-slate-950">
+            Owner Approval Center
+          </h1>
+          <p className="mt-2 text-sm text-slate-500">
+            ยืนยันตัวตนครั้งแรก อุปกรณ์นี้จะจำ Session ไว้ 180 วัน
+          </p>
+          <input
+            className="mt-6 w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-teal-500"
+            type="password"
+            autoComplete="current-password"
+            value={ownerKey}
+            onChange={(event) =>
+              setOwnerKey(event.target.value)
+            }
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                void signIn();
+              }
+            }}
+            placeholder="Owner Key"
+          />
+          {error && (
+            <p className="mt-3 text-sm text-rose-600">
+              {error}
+            </p>
+          )}
+          <button
+            className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-teal-600 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
+            disabled={
+              signingIn ||
+              ownerKey.trim().length === 0 ||
+              session.configured === false
+            }
+            onClick={() => void signIn()}
+            type="button"
+          >
+            {signingIn && (
+              <LoaderCircle
+                className="animate-spin"
+                size={18}
+              />
+            )}
+            เข้าสู่ระบบเจ้าของ
+          </button>
+          {session.configured === false && (
+            <p className="mt-3 text-sm text-rose-600">
+              Production ยังไม่ได้ตั้ง Owner Approval Secret
+            </p>
+          )}
+        </div>
+      </section>
+    );
+  }
+
 
   async function decide(item: QueueItem, decision: "APPROVE" | "REJECT") {
     setBusyId(item.campaignDraftId);

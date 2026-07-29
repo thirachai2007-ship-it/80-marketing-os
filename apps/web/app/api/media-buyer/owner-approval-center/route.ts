@@ -8,6 +8,10 @@ import {
   decideCampaignApproval,
   listOwnerApprovalQueue,
 } from "@/lib/media-buyer/owner-approval-center";
+import {
+  hasValidOwnerSession,
+  isSameOriginRequest,
+} from "@/lib/owner-session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,6 +38,17 @@ function parseNumber(
 export async function GET(
   request: NextRequest,
 ) {
+  if (!hasValidOwnerSession(request)) {
+    return NextResponse.json(
+      {
+        ok: false,
+        authenticated: false,
+        error: "Owner authentication required",
+      },
+      { status: 401 },
+    );
+  }
+
   try {
     const params =
       request.nextUrl.searchParams;
@@ -145,6 +160,24 @@ export async function GET(
 export async function POST(
   request: NextRequest,
 ) {
+  if (
+    !hasValidOwnerSession(request) ||
+    !isSameOriginRequest(request)
+  ) {
+    return NextResponse.json(
+      {
+        ok: false,
+        authenticated: false,
+        campaignPublished: false,
+        realSpendUsed: false,
+        budgetChanged: false,
+        metaMutationExecuted: false,
+        error: "Owner authentication required",
+      },
+      { status: 401 },
+    );
+  }
+
   try {
     const params =
       request.nextUrl.searchParams;
