@@ -1987,6 +1987,7 @@ async function claimNextQueueItem(input: {
   productCategory?: string;
   mediaType?: string;
   modalityV2Only?: boolean;
+  collisionAttempt?: number;
 }): Promise<{
   id: string;
   attempts: number;
@@ -2108,6 +2109,17 @@ async function claimNextQueueItem(input: {
     });
 
   if (claimed.count !== 1) {
+    const collisionAttempt =
+      input.collisionAttempt ?? 0;
+
+    if (collisionAttempt < 5) {
+      return claimNextQueueItem({
+        ...input,
+        collisionAttempt:
+          collisionAttempt + 1,
+      });
+    }
+
     return null;
   }
 
