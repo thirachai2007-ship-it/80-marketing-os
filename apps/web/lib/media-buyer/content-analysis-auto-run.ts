@@ -6,12 +6,12 @@ import {
 } from "@/lib/media-buyer/content-analysis-coverage";
 
 export const CONTENT_ANALYSIS_AUTO_RUN_VERSION =
-  "content-analysis-auto-run-scheduler-v1";
+  "content-analysis-auto-run-scheduler-v2";
 
 const AUTO_RUN_TYPE =
   "CONTENT_ANALYSIS_AUTO_RUN_PLAN";
 const DEFAULT_BATCH_SIZE = 1;
-const MAX_BATCH_SIZE = 5;
+const MAX_BATCH_SIZE = 10;
 const MAX_APPROVED_ITEMS = 2_000;
 const MAX_ZERO_PROGRESS_TICKS = 3;
 const CHECKPOINT_LIMIT = 12;
