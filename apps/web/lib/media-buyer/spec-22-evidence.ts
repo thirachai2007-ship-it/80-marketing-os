@@ -10,6 +10,7 @@ export function getSpec22Evidence() {
     spendSatang: 99_999,
     netProfitSatang: -99_999,
     orders: 0,
+    optimizationAttempts: 0,
   });
   const optimizableResult = evaluateAudiencePausePolicy({
     ...policy,
@@ -17,6 +18,7 @@ export function getSpec22Evidence() {
     spendSatang: 100_000,
     netProfitSatang: -20_000,
     orders: 0,
+    optimizationAttempts: 0,
   });
   const maturePoorResult = evaluateAudiencePausePolicy({
     ...policy,
@@ -24,6 +26,7 @@ export function getSpec22Evidence() {
     spendSatang: 100_000,
     netProfitSatang: -80_000,
     orders: 0,
+    optimizationAttempts: 1,
   });
   const automaticPause = false;
   const pass =
