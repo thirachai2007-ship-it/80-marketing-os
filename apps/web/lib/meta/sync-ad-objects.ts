@@ -495,15 +495,17 @@ export async function syncMetaAdObjects({
     const existing = new Set(
       existingIds.map((item) => item.id),
     );
+    const persistenceBatchSize =
+      resource === "campaigns" ? 20 : 5;
 
     for (
       let start = 0;
       start < items.length;
-      start += 5
+      start += persistenceBatchSize
     ) {
       const batch = items.slice(
         start,
-        start + 5,
+        start + persistenceBatchSize,
       );
 
       await Promise.all(
