@@ -46,6 +46,7 @@ type MetaInsightRow = {
   cpm?: string;
   cpp?: string;
   actions?: MetaAction[];
+  action_values?: MetaAction[];
   cost_per_action_type?: MetaAction[];
 };
 
@@ -109,6 +110,20 @@ function actionValue(
       ? Math.max(...candidates)
       : 0,
   );
+}
+
+function actionRevenueSatang(
+  actions: MetaAction[] | undefined,
+): number {
+  if (!actions) return 0;
+  const values = actions
+    .filter((action) => [
+      "purchase",
+      "omni_purchase",
+      "offsite_conversion.fb_pixel_purchase",
+    ].includes(action.action_type))
+    .map((action) => number(action.value));
+  return satang(String(values.length > 0 ? Math.max(...values) : 0));
 }
 
 async function ensureMetaHierarchy(
@@ -228,8 +243,12 @@ async function saveInsight(
       "omni_purchase",
       "offsite_conversion.fb_pixel_purchase",
     ]),
+    revenueSatang: actionRevenueSatang(row.action_values),
     actionsJson: JSON.stringify(
       row.actions || [],
+    ),
+    actionValuesJson: JSON.stringify(
+      row.action_values || [],
     ),
     costPerActionTypeJson: JSON.stringify(
       row.cost_per_action_type || [],
@@ -373,6 +392,7 @@ export async function syncMetaInsights({
         "cpm",
         "cpp",
         "actions",
+        "action_values",
         "cost_per_action_type",
       ].join(","),
       limit: "100",

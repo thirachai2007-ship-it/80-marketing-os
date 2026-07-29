@@ -1,0 +1,3 @@
+ALTER TABLE "MetaAdInsight"
+ADD COLUMN "revenueSatang" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN "actionValuesJson" TEXT NOT NULL DEFAULT '[]';

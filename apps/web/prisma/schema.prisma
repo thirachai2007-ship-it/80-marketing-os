@@ -355,8 +355,10 @@ model MetaAdInsight {
   leads                         Int @default(0)
   messagingConversationsStarted Int @default(0)
   purchases                     Int @default(0)
+  revenueSatang                 Int @default(0)
 
   actionsJson           String @default("[]")
+  actionValuesJson      String @default("[]")
   costPerActionTypeJson String @default("[]")
 
   createdAt DateTime @default(now())
