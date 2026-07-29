@@ -9,13 +9,16 @@ import {
 } from "@/lib/media-buyer/content-analysis-policy";
 
 export const CONTENT_ANALYSIS_COVERAGE_VERSION =
-  "content-analysis-coverage-planner-v1";
+  "content-analysis-coverage-planner-v2";
 
 export type CoveragePage = {
   pageId: string;
   pageName: string;
   pictureUrl: string | null;
   totalPosts: number;
+  duplicatePosts: number;
+  eligiblePosts: number;
+  accountedPosts: number;
   fingerprinted: number;
   completed: number;
   pending: number;
@@ -61,6 +64,7 @@ export async function getContentAnalysisCoverage() {
       pages.map(async (page) => {
         const [
           totalPosts,
+          duplicatePosts,
           fingerprinted,
           completed,
           pending,
@@ -82,6 +86,15 @@ export async function getContentAnalysisCoverage() {
               createdTime: {
                 gte: createdAfter,
               },
+              isDuplicate: true,
+            },
+          }),
+          prisma.pageContent.count({
+            where: {
+              pageId: page.id,
+              createdTime: {
+                gte: createdAfter,
+              },
               contentFingerprint: {
                 not: null,
               },
@@ -95,6 +108,7 @@ export async function getContentAnalysisCoverage() {
               },
               analysisStatus:
                 "COMPLETED",
+              isDuplicate: false,
               analysis: {
                 isNot: null,
               },
@@ -108,6 +122,7 @@ export async function getContentAnalysisCoverage() {
               },
               analysisStatus:
                 "PENDING",
+              isDuplicate: false,
             },
           }),
           prisma.analysisQueueItem.count({
@@ -115,6 +130,7 @@ export async function getContentAnalysisCoverage() {
               status: "READY",
               content: {
                 pageId: page.id,
+                isDuplicate: false,
                 createdTime: {
                   gte: createdAfter,
                 },
@@ -123,9 +139,15 @@ export async function getContentAnalysisCoverage() {
           }),
           prisma.analysisQueueItem.count({
             where: {
-              status: "PROCESSING",
+              status: {
+                in: [
+                  "RUNNING",
+                  "PROCESSING",
+                ],
+              },
               content: {
                 pageId: page.id,
+                isDuplicate: false,
                 createdTime: {
                   gte: createdAfter,
                 },
@@ -137,6 +159,7 @@ export async function getContentAnalysisCoverage() {
               status: "FAILED",
               content: {
                 pageId: page.id,
+                isDuplicate: false,
                 createdTime: {
                   gte: createdAfter,
                 },
@@ -145,9 +168,18 @@ export async function getContentAnalysisCoverage() {
           }),
         ]);
 
+        const eligiblePosts =
+          Math.max(
+            totalPosts -
+              duplicatePosts,
+            0,
+          );
+        const accountedPosts =
+          completed +
+          duplicatePosts;
         const coveragePercent =
           percent(
-            completed,
+            accountedPosts,
             totalPosts,
           );
 
@@ -157,6 +189,9 @@ export async function getContentAnalysisCoverage() {
           pictureUrl:
             page.pictureUrl,
           totalPosts,
+          duplicatePosts,
+          eligiblePosts,
+          accountedPosts,
           fingerprinted,
           completed,
           pending,
@@ -228,6 +263,15 @@ export async function getContentAnalysisCoverage() {
         totalPosts:
           result.totalPosts +
           item.totalPosts,
+        duplicatePosts:
+          result.duplicatePosts +
+          item.duplicatePosts,
+        eligiblePosts:
+          result.eligiblePosts +
+          item.eligiblePosts,
+        accountedPosts:
+          result.accountedPosts +
+          item.accountedPosts,
         fingerprinted:
           result.fingerprinted +
           item.fingerprinted,
@@ -250,6 +294,9 @@ export async function getContentAnalysisCoverage() {
       {
         pages: 0,
         totalPosts: 0,
+        duplicatePosts: 0,
+        eligiblePosts: 0,
+        accountedPosts: 0,
         fingerprinted: 0,
         completed: 0,
         pending: 0,
@@ -274,8 +321,13 @@ export async function getContentAnalysisCoverage() {
       ...totals,
       coveragePercent:
         percent(
-          totals.completed,
+          totals.accountedPosts,
           totals.totalPosts,
+        ),
+      aiCoveragePercent:
+        percent(
+          totals.completed,
+          totals.eligiblePosts,
         ),
     },
     recommendedPageId,
