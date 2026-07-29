@@ -1569,8 +1569,12 @@ async function queuePendingContent(input: {
   productCategory?: string;
   forceReanalyze?: boolean;
 }): Promise<number> {
-  const contents =
-    await prisma.pageContent.findMany({
+  let cursor: string | undefined;
+  let queued = 0;
+
+  while (queued < input.batchSize) {
+    const contents =
+      await prisma.pageContent.findMany({
       where: {
         createdTime: {
           gte:
@@ -1622,10 +1626,19 @@ async function queuePendingContent(input: {
           createdTime:
             "desc",
         },
+        {
+          id: "asc",
+        },
       ],
 
-      take:
-        input.batchSize * 4,
+      take: 50,
+
+      ...(cursor
+        ? {
+            cursor: { id: cursor },
+            skip: 1,
+          }
+        : {}),
 
       select: {
         id: true,
@@ -1634,11 +1647,13 @@ async function queuePendingContent(input: {
         fingerprintVersion: true,
         previousWinner: true,
       },
-    });
+      });
 
-  let queued = 0;
+    if (contents.length === 0) {
+      break;
+    }
 
-  for (const content of contents) {
+    for (const content of contents) {
     const fingerprint =
       normalizeText(
         content.contentFingerprint,
@@ -1667,87 +1682,81 @@ async function queuePendingContent(input: {
         },
       });
 
-    if (existing) {
-      if (
-        input.forceReanalyze &&
-        (
-          existing.status ===
-            "COMPLETED" ||
-          existing.status ===
-            "FAILED"
-        )
-      ) {
-        await prisma.analysisQueueItem.update({
-          where: {
-            id:
-              existing.id,
-          },
+      if (existing) {
+        if (
+          input.forceReanalyze &&
+          (
+            existing.status ===
+              "COMPLETED" ||
+            existing.status ===
+              "FAILED"
+          )
+        ) {
+          await prisma.$transaction([
+            prisma.analysisQueueItem.update({
+              where: { id: existing.id },
+              data: {
+                status: "READY",
+                reason: "FORCE_REANALYZE",
+                priority: content.previousWinner ? 100 : 50,
+                attempts: 0,
+                errorMessage: null,
+                lockedBy: null,
+                lockedAt: null,
+                startedAt: null,
+                completedAt: null,
+              },
+            }),
+            prisma.pageContent.update({
+              where: { id: content.id },
+              data: { analysisStatus: "QUEUED", analysisError: null },
+            }),
+          ]);
+          queued += 1;
+        } else if (
+          existing.status === "READY" ||
+          existing.status === "RUNNING"
+        ) {
+          await prisma.pageContent.updateMany({
+            where: { id: content.id, analysisStatus: "PENDING" },
+            data: { analysisStatus: "QUEUED", analysisError: null },
+          });
+        }
 
-          data: {
-            status:
-              "READY",
-
-            reason:
-              "FORCE_REANALYZE",
-
-            priority:
-              content.previousWinner
-                ? 100
-                : 50,
-
-            attempts:
-              0,
-
-            errorMessage:
-              null,
-
-            lockedBy:
-              null,
-
-            lockedAt:
-              null,
-
-            startedAt:
-              null,
-
-            completedAt:
-              null,
-          },
-        });
-
-        queued += 1;
+        continue;
       }
 
-      continue;
+      await prisma.$transaction([
+        prisma.analysisQueueItem.create({
+          data: {
+            contentId: content.id,
+            contentFingerprint: fingerprint,
+            fingerprintVersion: content.fingerprintVersion,
+            status: "READY",
+            reason: content.previousWinner
+              ? "PENDING_PREVIOUS_WINNER"
+              : "PENDING_CONTENT_ANALYSIS",
+            priority: content.previousWinner ? 100 : 50,
+          },
+        }),
+        prisma.pageContent.update({
+          where: { id: content.id },
+          data: { analysisStatus: "QUEUED", analysisError: null },
+        }),
+      ]);
+
+      queued += 1;
+
+      if (queued >= input.batchSize) {
+        break;
+      }
     }
 
-    await prisma.analysisQueueItem.create({
-      data: {
-        contentId:
-          content.id,
+    cursor = contents.at(-1)?.id;
 
-        contentFingerprint:
-          fingerprint,
-
-        fingerprintVersion:
-          content.fingerprintVersion,
-
-        status:
-          "READY",
-
-        reason:
-          content.previousWinner
-            ? "PENDING_PREVIOUS_WINNER"
-            : "PENDING_CONTENT_ANALYSIS",
-
-        priority:
-          content.previousWinner
-            ? 100
-            : 50,
-      },
-    });
-
-    queued += 1;
+    if (contents.length < 50) {
+      break;
+    }
   }
 
   return queued;
