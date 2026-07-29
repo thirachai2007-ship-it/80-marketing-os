@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   Settings,
   Sparkles,
+  Film,
 } from "lucide-react";
 
 type MenuItem = {
@@ -47,6 +48,11 @@ const menuGroups: MenuGroup[] = [
         title: "Content Intelligence",
         href: "/marketing/content-intelligence",
         icon: BrainCircuit,
+      },
+      {
+        title: "Video Editing",
+        href: "/marketing/video-editing",
+        icon: Film,
       },
       {
         title: "Experiments",

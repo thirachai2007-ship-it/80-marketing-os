@@ -85,3 +85,40 @@ export async function planVideoEdit(input: VideoEditPlanInput) {
 
   return { creativeRevisionId: revision.id, fingerprint, editPlan, status: "READY_FOR_APPROVAL" as const, mediaRendered: false, ownerApprovalRequired: true };
 }
+
+export async function listVideoEditingCandidates() {
+  const revisions = await prisma.creativeRevision.findMany({
+    where: {
+      creativeAsset: { assetType: "VIDEO", isActive: true },
+      status: { in: ["PLANNING", "DRAFT", "READY_FOR_APPROVAL"] },
+    },
+    orderBy: { updatedAt: "desc" },
+    take: 100,
+    select: {
+      id: true,
+      version: true,
+      revisionType: true,
+      status: true,
+      mediaUrl: true,
+      thumbnailUrl: true,
+      durationMs: true,
+      aspectRatio: true,
+      editInstructions: true,
+      creativeAsset: { select: { name: true, originalMediaUrl: true, originalThumbnailUrl: true, page: { select: { name: true } } } },
+    },
+  });
+
+  return revisions.map((revision) => ({
+    id: revision.id,
+    version: revision.version,
+    revisionType: revision.revisionType,
+    status: revision.status,
+    assetName: revision.creativeAsset.name,
+    pageName: revision.creativeAsset.page.name,
+    sourceUrl: revision.mediaUrl ?? revision.creativeAsset.originalMediaUrl,
+    thumbnailUrl: revision.thumbnailUrl ?? revision.creativeAsset.originalThumbnailUrl,
+    durationMs: revision.durationMs,
+    aspectRatio: revision.aspectRatio,
+    hasEditPlan: Boolean(revision.editInstructions),
+  }));
+}
