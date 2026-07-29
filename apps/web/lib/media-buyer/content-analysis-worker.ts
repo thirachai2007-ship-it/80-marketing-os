@@ -1,4 +1,7 @@
 import prisma from "@/lib/prisma";
+import {
+  getContentAnalysisCutoff,
+} from "@/lib/media-buyer/content-analysis-policy";
 
 export const CONTENT_ANALYSIS_WORKER_VERSION =
   "content-analysis-worker";
@@ -1569,6 +1572,10 @@ async function queuePendingContent(input: {
   const contents =
     await prisma.pageContent.findMany({
       where: {
+        createdTime: {
+          gte:
+            getContentAnalysisCutoff(),
+        },
         ...(input.pageId
           ? {
               pageId:
@@ -1808,30 +1815,24 @@ async function claimNextQueueItem(input: {
             3,
         },
 
-        ...(input.pageId
-          ? {
-              content: {
+        content: {
+          createdTime: {
+            gte:
+              getContentAnalysisCutoff(),
+          },
+          ...(input.pageId
+            ? {
                 pageId:
                   input.pageId,
-              },
-            }
-          : {}),
-
-        ...(input.productCategory
-          ? {
-              content: {
-                ...(input.pageId
-                  ? {
-                      pageId:
-                        input.pageId,
-                    }
-                  : {}),
-
+              }
+            : {}),
+          ...(input.productCategory
+            ? {
                 productCategory:
                   input.productCategory,
-              },
-            }
-          : {}),
+              }
+            : {}),
+        },
       },
 
       orderBy: [

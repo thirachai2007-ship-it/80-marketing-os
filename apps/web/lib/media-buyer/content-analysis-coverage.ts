@@ -3,6 +3,10 @@ import prisma from "@/lib/prisma";
 import {
   runAnalysisBatch,
 } from "@/lib/media-buyer/analysis-batch-orchestrator";
+import {
+  CONTENT_ANALYSIS_RECENCY_DAYS,
+  getContentAnalysisCutoff,
+} from "@/lib/media-buyer/content-analysis-policy";
 
 export const CONTENT_ANALYSIS_COVERAGE_VERSION =
   "content-analysis-coverage-planner-v1";
@@ -35,6 +39,8 @@ function percent(
 }
 
 export async function getContentAnalysisCoverage() {
+  const createdAfter =
+    getContentAnalysisCutoff();
   const pages =
     await prisma.managedPage.findMany({
       where: {
@@ -65,11 +71,17 @@ export async function getContentAnalysisCoverage() {
           prisma.pageContent.count({
             where: {
               pageId: page.id,
+              createdTime: {
+                gte: createdAfter,
+              },
             },
           }),
           prisma.pageContent.count({
             where: {
               pageId: page.id,
+              createdTime: {
+                gte: createdAfter,
+              },
               contentFingerprint: {
                 not: null,
               },
@@ -78,6 +90,9 @@ export async function getContentAnalysisCoverage() {
           prisma.pageContent.count({
             where: {
               pageId: page.id,
+              createdTime: {
+                gte: createdAfter,
+              },
               analysisStatus:
                 "COMPLETED",
               analysis: {
@@ -88,6 +103,9 @@ export async function getContentAnalysisCoverage() {
           prisma.pageContent.count({
             where: {
               pageId: page.id,
+              createdTime: {
+                gte: createdAfter,
+              },
               analysisStatus:
                 "PENDING",
             },
@@ -97,6 +115,9 @@ export async function getContentAnalysisCoverage() {
               status: "READY",
               content: {
                 pageId: page.id,
+                createdTime: {
+                  gte: createdAfter,
+                },
               },
             },
           }),
@@ -105,6 +126,9 @@ export async function getContentAnalysisCoverage() {
               status: "PROCESSING",
               content: {
                 pageId: page.id,
+                createdTime: {
+                  gte: createdAfter,
+                },
               },
             },
           }),
@@ -113,6 +137,9 @@ export async function getContentAnalysisCoverage() {
               status: "FAILED",
               content: {
                 pageId: page.id,
+                createdTime: {
+                  gte: createdAfter,
+                },
               },
             },
           }),
@@ -231,7 +258,13 @@ export async function getContentAnalysisCoverage() {
     coverageVersion:
       CONTENT_ANALYSIS_COVERAGE_VERSION,
     strategy:
-      "LOWEST_COVERAGE_RATIO_THEN_COMPLETED_COUNT",
+      "ROLLING_90_DAYS_LOWEST_COVERAGE_RATIO",
+    window: {
+      days:
+        CONTENT_ANALYSIS_RECENCY_DAYS,
+      createdAfter:
+        createdAfter.toISOString(),
+    },
     totals: {
       ...totals,
       coveragePercent:
