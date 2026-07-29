@@ -20,6 +20,8 @@ type MetaRequestOptions = {
   accessToken?: string;
   method?: "GET" | "POST" | "DELETE";
   body?: Record<string, string>;
+  timeoutMs?: number;
+  maxRetries?: number;
 };
 
 export type MetaPagingResponse<T> = {
@@ -214,26 +216,30 @@ function retryDelayMs(
 async function fetchMeta<T>(
   url: URL,
   requestInit: RequestInit,
+  requestOptions: Pick<MetaRequestOptions, "timeoutMs" | "maxRetries"> = {},
 ) {
   const method =
     requestInit.method || "GET";
-  const timeoutMs =
-    boundedInteger(
+  const timeoutMs = requestOptions.timeoutMs === undefined
+    ? boundedInteger(
       process.env
         .META_API_TIMEOUT_MS,
       DEFAULT_TIMEOUT_MS,
       1_000,
       60_000,
-    );
+    )
+    : Math.min(60_000, Math.max(1_000, Math.floor(requestOptions.timeoutMs)));
   const maxRetries =
     method === "GET"
-      ? boundedInteger(
+      ? requestOptions.maxRetries === undefined
+        ? boundedInteger(
           process.env
             .META_API_MAX_RETRIES,
           DEFAULT_MAX_RETRIES,
           0,
           5,
         )
+        : Math.min(5, Math.max(0, Math.floor(requestOptions.maxRetries)))
       : 0;
 
   for (
@@ -356,6 +362,7 @@ export async function metaRequest<T>(
   return fetchMeta<T>(
     url,
     requestInit,
+    options,
   );
 }
 
