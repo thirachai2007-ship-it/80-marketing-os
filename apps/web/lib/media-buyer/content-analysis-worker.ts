@@ -30,6 +30,22 @@ const PAGE_CATEGORY_RULES: Record<
   "771071579428720": "STICKER",
 };
 
+// Used only when the post itself has no usable product signal. These defaults
+// are derived from each page's dominant, already-classified product family.
+const PAGE_DEFAULT_CATEGORY_RULES: Record<
+  string,
+  Exclude<ProductCategory, "UNKNOWN">
+> = {
+  "1003970702797493": "STICKER",
+  "104721362255252": "PRINTED_SHIRT",
+  "154924774365709": "STICKER",
+  "263789240657264": "PRINTED_SHIRT",
+  "303513602853132": "APRON",
+  "554763461060330": "PRINTED_SHIRT",
+  "771071579428720": "STICKER",
+  "938848142652531": "PRINTED_SHIRT",
+};
+
 const STICKER_ONLY_PAGE_NAMES = [
   "Sticker2Day",
   "TTN สติกเกอร์สูญญากาศ",
@@ -169,6 +185,7 @@ type ModalityInputEvidence = {
 
 type ProductClassificationSource =
   | "PAGE_RULE"
+  | "PAGE_DEFAULT"
   | "KEYWORD_RULE"
   | "AI"
   | "EXISTING_LABEL"
@@ -475,6 +492,20 @@ function resolveHybridProductCategory(input: {
     };
   }
 
+  const pageDefault =
+    PAGE_DEFAULT_CATEGORY_RULES[input.pageId];
+
+  if (pageDefault) {
+    return {
+      productCategory: pageDefault,
+      confidence: 55,
+      source: "PAGE_DEFAULT",
+      reasons: [
+        `ไม่มีสัญญาณสินค้าที่ชัดเจนในโพสต์ จึงใช้หมวดหลักของเพจ ${pageDefault}`,
+      ],
+    };
+  }
+
   return {
     productCategory:
       "UNKNOWN",
@@ -489,6 +520,64 @@ function resolveHybridProductCategory(input: {
       "AI, Keyword และข้อมูลเดิมยังไม่เพียงพอ",
       ...keywordDecision.reasons,
     ],
+  };
+}
+
+export async function backfillUnknownProductCategories() {
+  const cutoff = getContentAnalysisCutoff();
+  const contents = await prisma.pageContent.findMany({
+    where: {
+      createdTime: { gte: cutoff },
+      isDuplicate: false,
+      productCategory: "UNKNOWN",
+      pageId: { in: Object.keys(PAGE_DEFAULT_CATEGORY_RULES) },
+      page: { isActive: true },
+    },
+    select: {
+      id: true,
+      pageId: true,
+      productEvidence: true,
+    },
+  });
+
+  const updates = contents.flatMap((content) => {
+    const category = PAGE_DEFAULT_CATEGORY_RULES[content.pageId];
+    if (!category) return [];
+
+    const fallbackEvidence = [
+      "source=PAGE_DEFAULT",
+      `ไม่มีสัญญาณสินค้าที่ชัดเจนในโพสต์ จึงใช้หมวดหลักของเพจ ${category}`,
+      content.productEvidence,
+    ]
+      .filter(Boolean)
+      .join(" | ");
+
+    return [
+      prisma.pageContent.update({
+        where: { id: content.id },
+        data: {
+          productCategory: category,
+          productConfidence: 55,
+          productEvidence: fallbackEvidence,
+        },
+      }),
+    ];
+  });
+
+  if (updates.length > 0) {
+    await prisma.$transaction(updates);
+  }
+
+  return {
+    cutoff: cutoff.toISOString(),
+    scanned: contents.length,
+    updated: updates.length,
+    unresolved: contents.length - updates.length,
+    safety: {
+      campaignPublished: false,
+      realSpendUsed: false,
+      budgetChanged: false,
+    },
   };
 }
 
