@@ -311,6 +311,17 @@ function decide(input: {
   };
 }
 
+export function evaluateAudiencePausePolicy(input: {
+  score: number;
+  spendSatang: number;
+  netProfitSatang: number;
+  orders: number;
+  minimumSpendSatang: number;
+  minimumOrders: number;
+}) {
+  return decide(input);
+}
+
 function learningStatus(decision: AudiencePerformanceDecision): string {
   switch (decision) {
     case "SCALE_CANDIDATE":
