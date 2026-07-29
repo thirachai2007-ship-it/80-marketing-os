@@ -9,7 +9,7 @@ import {
 } from "@/lib/media-buyer/analysis-queue";
 
 export const ANALYSIS_BATCH_ORCHESTRATOR_VERSION =
-  "analysis-batch-orchestrator-v1";
+  "analysis-batch-orchestrator-v2";
 
 const CONTROL_RUN_TYPE =
   "CONTENT_ANALYSIS_BATCH_ORCHESTRATOR_CONTROL";
@@ -246,7 +246,10 @@ export async function runAnalysisBatch(
         pageId: options.pageId,
         productCategory:
           options.productCategory,
-        queuePendingContent: false,
+        // Every automatic batch must first reconcile new or changed posts
+        // for the selected page. Otherwise posts synced after the initial
+        // backfill remain PENDING forever and require a manual queue build.
+        queuePendingContent: true,
         workerId:
           `orchestrator-${run.id}`,
       });
