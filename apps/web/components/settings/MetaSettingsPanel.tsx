@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   Activity,
   BadgeCheck,
@@ -11,6 +12,7 @@ import {
   ExternalLink,
   FileText,
   Layers3,
+  Link2,
   LoaderCircle,
   Megaphone,
   MessageCircle,
@@ -189,6 +191,8 @@ export default function MetaSettingsPanel() {
   }, []);
 
   useEffect(() => {
+    // Synchronize this client dashboard with the latest Meta data.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadDashboard();
   }, [loadDashboard]);
 
@@ -442,6 +446,40 @@ export default function MetaSettingsPanel() {
           </div>
         </div>
       </section>
+
+      {connected && (
+        <section className="flex flex-col gap-5 rounded-3xl border border-indigo-100 bg-gradient-to-br from-indigo-50 via-white to-cyan-50 p-6 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-start gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-700">
+              <Link2 size={22} />
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="heading-font text-lg font-bold text-slate-950">
+                  Page–Ad Account Mapping
+                </h2>
+                <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wide text-amber-700">
+                  Required for Backfill
+                </span>
+              </div>
+              <p className="mt-2 max-w-2xl text-xs leading-5 text-slate-600">
+                กำหนดบัญชีโฆษณาหลักให้แต่ละ
+                Facebook Page เพื่อให้ Content
+                Linkage และ Historical Insight
+                Backfill อ่านข้อมูลถูกบัญชี
+              </p>
+            </div>
+          </div>
+
+          <Link
+            href="/settings/meta/page-ad-account-mapping"
+            className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-5 text-xs font-bold text-white shadow-[0_10px_24px_rgba(79,70,229,0.2)] transition hover:bg-indigo-700"
+          >
+            จัดการ Mapping
+            <ExternalLink size={15} />
+          </Link>
+        </section>
+      )}
 
       <section>
         <div className="mb-3 flex items-center justify-between">

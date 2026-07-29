@@ -1139,10 +1139,10 @@ export default function ContentAdLinkageBackfillDashboard() {
                 "ACCOUNT_MAPPING_MISSING" && (
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <Link
-                    href="/settings/meta"
+                    href="/settings/meta/page-ad-account-mapping"
                     className="rounded-xl bg-white/80 px-3 py-2 text-[10px] font-bold"
                   >
-                    ตั้งค่า Meta
+                    ตั้งค่า Mapping
                   </Link>
                 </div>
               )}

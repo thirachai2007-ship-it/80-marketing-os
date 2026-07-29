@@ -1,5 +1,6 @@
 import { getActiveMetaConnection } from "@/lib/meta/connection-token";
 import { metaRequestAll } from "@/lib/meta/client";
+import { PAGE_AD_ACCOUNT_MAPPING_LOCK_KEY } from "@/lib/meta/page-ad-account-mapping-lock";
 import prisma from "@/lib/prisma";
 
 type MetaAdAccount = {
@@ -56,53 +57,6 @@ export async function syncMetaAdAccounts() {
           maximumPages: 10,
         },
       );
-    let created = 0;
-    let updated = 0;
-
-    for (const account of accounts) {
-      const existing =
-        await prisma.adAccount.findUnique({
-          where: {
-            id: account.id,
-          },
-          select: {
-            id: true,
-          },
-        });
-
-      await prisma.adAccount.upsert({
-        where: {
-          id: account.id,
-        },
-        create: {
-          id: account.id,
-          name: account.name || account.id,
-          currency: account.currency || "THB",
-          timezone:
-            account.timezone_name || "Asia/Bangkok",
-          isActive: account.account_status === 1,
-          accountStatus: account.account_status,
-          businessId: account.business?.id,
-          metaConnectionId: connection.id,
-        },
-        update: {
-          name: account.name || account.id,
-          currency: account.currency || "THB",
-          timezone:
-            account.timezone_name || "Asia/Bangkok",
-          isActive: account.account_status === 1,
-          accountStatus: account.account_status,
-          businessId: account.business?.id,
-          metaConnectionId: connection.id,
-        },
-      });
-
-      if (existing) {
-        updated += 1;
-      } else {
-        created += 1;
-      }
-    }
 
     const businesses =
       await metaRequestAll<MetaBusiness>(
@@ -150,109 +104,342 @@ export async function syncMetaAdAccounts() {
       }
     }
 
-    for (const [pageId, businessId] of pageBusinessIds) {
-      await prisma.managedPage.updateMany({
-        where: {
-          id: pageId,
-          metaConnectionId: connection.id,
-        },
-        data: {
-          businessId,
-        },
-      });
-    }
+    const reconciliation =
+      await prisma.$transaction(
+        async (transaction) => {
+          const locks =
+            await transaction.$queryRaw<
+              Array<{
+                acquired: boolean;
+              }>
+            >`
+              SELECT pg_try_advisory_xact_lock(
+                ${PAGE_AD_ACCOUNT_MAPPING_LOCK_KEY}
+              ) AS acquired
+            `;
 
-    const [pages, syncedAccounts] = await Promise.all([
-      prisma.managedPage.findMany({
-        where: {
-          metaConnectionId: connection.id,
-          isActive: true,
-          businessId: {
-            not: null,
-          },
-        },
-        select: {
-          id: true,
-          name: true,
-          businessId: true,
-        },
-      }),
-      prisma.adAccount.findMany({
-        where: {
-          metaConnectionId: connection.id,
-          isActive: true,
-          businessId: {
-            not: null,
-          },
-        },
-        select: {
-          id: true,
-          name: true,
-          businessId: true,
-        },
-      }),
-    ]);
-    let mappingsCreated = 0;
+          if (
+            locks[0]?.acquired !==
+            true
+          ) {
+            throw new Error(
+              "มีคำสั่ง Mapping, Sync หรือ Backfill กำลังเริ่มพร้อมกัน กรุณาลอง Sync ใหม่",
+            );
+          }
 
-    await prisma.metaPageAdAccountMapping.updateMany({
-      where: {
-        metaConnectionId: connection.id,
-        status: "ACTIVE",
-      },
-      data: {
-        status: "INACTIVE",
-      },
-    });
+          const openBackfill =
+            await transaction.mediaBuyerRun.findFirst(
+              {
+                where: {
+                  runType:
+                    "CONTENT_AD_LINKAGE_INSIGHT_BACKFILL_V1",
+                  status: {
+                    in: [
+                      "ACTIVE",
+                      "RUNNING",
+                    ],
+                  },
+                },
+                orderBy: {
+                  startedAt:
+                    "desc",
+                },
+                select: {
+                  id: true,
+                  status: true,
+                },
+              },
+            );
 
-    for (const page of pages) {
-      const matchingAccounts = syncedAccounts.filter(
-        (account) =>
-          account.businessId === page.businessId,
-      );
+          if (openBackfill) {
+            throw new Error(
+              `ยัง Sync Ad Accounts ไม่ได้ เพราะ Backfill ${openBackfill.id} อยู่ในสถานะ ${openBackfill.status}`,
+            );
+          }
 
-      for (const account of matchingAccounts) {
-        const existing =
-          await prisma.metaPageAdAccountMapping.findUnique({
-            where: {
-              metaConnectionId_pageId_adAccountId: {
-                metaConnectionId: connection.id,
-                pageId: page.id,
-                adAccountId: account.id,
+          let created = 0;
+          let updated = 0;
+
+          for (const account of accounts) {
+            const existing =
+              await transaction.adAccount.findUnique(
+                {
+                  where: {
+                    id: account.id,
+                  },
+                  select: {
+                    id: true,
+                  },
+                },
+              );
+
+            await transaction.adAccount.upsert(
+              {
+                where: {
+                  id: account.id,
+                },
+                create: {
+                  id: account.id,
+                  name:
+                    account.name ||
+                    account.id,
+                  currency:
+                    account.currency ||
+                    "THB",
+                  timezone:
+                    account.timezone_name ||
+                    "Asia/Bangkok",
+                  isActive:
+                    account.account_status ===
+                    1,
+                  accountStatus:
+                    account.account_status,
+                  businessId:
+                    account.business
+                      ?.id,
+                  metaConnectionId:
+                    connection.id,
+                },
+                update: {
+                  name:
+                    account.name ||
+                    account.id,
+                  currency:
+                    account.currency ||
+                    "THB",
+                  timezone:
+                    account.timezone_name ||
+                    "Asia/Bangkok",
+                  isActive:
+                    account.account_status ===
+                    1,
+                  accountStatus:
+                    account.account_status,
+                  businessId:
+                    account.business
+                      ?.id,
+                  metaConnectionId:
+                    connection.id,
+                },
+              },
+            );
+
+            if (existing) {
+              updated += 1;
+            } else {
+              created += 1;
+            }
+          }
+
+          for (const [
+            pageId,
+            businessId,
+          ] of pageBusinessIds) {
+            await transaction.managedPage.updateMany(
+              {
+                where: {
+                  id: pageId,
+                  metaConnectionId:
+                    connection.id,
+                },
+                data: {
+                  businessId,
+                },
+              },
+            );
+          }
+
+          const [
+            pages,
+            syncedAccounts,
+            manualMappings,
+          ] = await Promise.all([
+            transaction.managedPage.findMany(
+              {
+                where: {
+                  metaConnectionId:
+                    connection.id,
+                  isActive: true,
+                  businessId: {
+                    not: null,
+                  },
+                },
+                select: {
+                  id: true,
+                  name: true,
+                  businessId: true,
+                },
+              },
+            ),
+            transaction.adAccount.findMany(
+              {
+                where: {
+                  metaConnectionId:
+                    connection.id,
+                  isActive: true,
+                  businessId: {
+                    not: null,
+                  },
+                },
+                select: {
+                  id: true,
+                  name: true,
+                  businessId: true,
+                },
+              },
+            ),
+            transaction.metaPageAdAccountMapping.findMany(
+              {
+                where: {
+                  metaConnectionId:
+                    connection.id,
+                  source:
+                    "OWNER_MANUAL",
+                },
+                select: {
+                  pageId: true,
+                },
+                distinct: [
+                  "pageId",
+                ],
+              },
+            ),
+          ]);
+          const manuallyManagedPageIds =
+            new Set(
+              manualMappings.map(
+                (mapping) =>
+                  mapping.pageId,
+              ),
+            );
+
+          await transaction.metaPageAdAccountMapping.updateMany(
+            {
+              where: {
+                metaConnectionId:
+                  connection.id,
+                status:
+                  "ACTIVE",
+                source: {
+                  not: "OWNER_MANUAL",
+                },
+              },
+              data: {
+                status:
+                  "INACTIVE",
+                isPrimary: false,
               },
             },
-            select: {
-              id: true,
-            },
-          });
+          );
 
-        await prisma.metaPageAdAccountMapping.upsert({
-          where: {
-            metaConnectionId_pageId_adAccountId: {
-              metaConnectionId: connection.id,
-              pageId: page.id,
-              adAccountId: account.id,
-            },
-          },
-          create: {
-            metaConnectionId: connection.id,
-            pageId: page.id,
-            adAccountId: account.id,
-            status: "ACTIVE",
-            source: "BUSINESS_ID_MATCH",
-            verifiedAt: new Date(),
-          },
-          update: {
-            status: "ACTIVE",
-            source: "BUSINESS_ID_MATCH",
-            verifiedAt: new Date(),
-          },
-        });
+          let mappingsCreated = 0;
 
-        if (!existing) {
-          mappingsCreated += 1;
-        }
-      }
-    }
+          for (const page of pages) {
+            if (
+              manuallyManagedPageIds.has(
+                page.id,
+              )
+            ) {
+              continue;
+            }
+
+            const matchingAccounts =
+              syncedAccounts.filter(
+                (account) =>
+                  account.businessId ===
+                  page.businessId,
+              );
+
+            for (const account of matchingAccounts) {
+              const existing =
+                await transaction.metaPageAdAccountMapping.findUnique(
+                  {
+                    where: {
+                      metaConnectionId_pageId_adAccountId:
+                        {
+                          metaConnectionId:
+                            connection.id,
+                          pageId:
+                            page.id,
+                          adAccountId:
+                            account.id,
+                        },
+                    },
+                    select: {
+                      id: true,
+                      source: true,
+                    },
+                  },
+                );
+
+              if (
+                existing?.source ===
+                "OWNER_MANUAL"
+              ) {
+                continue;
+              }
+
+              await transaction.metaPageAdAccountMapping.upsert(
+                {
+                  where: {
+                    metaConnectionId_pageId_adAccountId:
+                      {
+                        metaConnectionId:
+                          connection.id,
+                        pageId:
+                          page.id,
+                        adAccountId:
+                          account.id,
+                      },
+                  },
+                  create: {
+                    metaConnectionId:
+                      connection.id,
+                    pageId:
+                      page.id,
+                    adAccountId:
+                      account.id,
+                    status:
+                      "ACTIVE",
+                    source:
+                      "BUSINESS_ID_MATCH",
+                    verifiedAt:
+                      new Date(),
+                  },
+                  update: {
+                    status:
+                      "ACTIVE",
+                    source:
+                      "BUSINESS_ID_MATCH",
+                    verifiedAt:
+                      new Date(),
+                  },
+                },
+              );
+
+              if (!existing) {
+                mappingsCreated += 1;
+              }
+            }
+          }
+
+          return {
+            accountsCreated:
+              created,
+            accountsUpdated:
+              updated,
+            mappingsCreated,
+            pagesWithBusinessId:
+              pages.length,
+            manuallyManagedPages:
+              manuallyManagedPageIds.size,
+          };
+        },
+        {
+          maxWait: 5_000,
+          timeout: 30_000,
+        },
+      );
 
     await prisma.metaSyncRun.update({
       where: {
@@ -261,15 +448,21 @@ export async function syncMetaAdAccounts() {
       data: {
         status: "COMPLETED",
         itemsFound: accounts.length,
-        itemsCreated: created,
-        itemsUpdated: updated,
+        itemsCreated:
+          reconciliation.accountsCreated,
+        itemsUpdated:
+          reconciliation.accountsUpdated,
         completedAt: new Date(),
         metadataJson: JSON.stringify({
           businessesFound: businesses.length,
           pagesMatchedToBusinesses:
             pageBusinessIds.size,
-          mappingsCreated,
-          pagesWithBusinessId: pages.length,
+          mappingsCreated:
+            reconciliation.mappingsCreated,
+          pagesWithBusinessId:
+            reconciliation.pagesWithBusinessId,
+          manuallyManagedPages:
+            reconciliation.manuallyManagedPages,
         }),
       },
     });
@@ -277,13 +470,19 @@ export async function syncMetaAdAccounts() {
     return {
       ok: true,
       accountsFound: accounts.length,
-      accountsCreated: created,
-      accountsUpdated: updated,
+      accountsCreated:
+        reconciliation.accountsCreated,
+      accountsUpdated:
+        reconciliation.accountsUpdated,
       businessesFound: businesses.length,
       pagesMatchedToBusinesses:
         pageBusinessIds.size,
-      mappingsCreated,
-      pagesWithBusinessId: pages.length,
+      mappingsCreated:
+        reconciliation.mappingsCreated,
+      pagesWithBusinessId:
+        reconciliation.pagesWithBusinessId,
+      manuallyManagedPages:
+        reconciliation.manuallyManagedPages,
       accounts: accounts.map((account) => ({
         id: account.id,
         name: account.name || account.id,

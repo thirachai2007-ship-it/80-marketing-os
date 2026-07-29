@@ -28,6 +28,11 @@ const pageTitles: Record<
     title: "Meta Integration",
     subtitle: "จัดการการเชื่อมต่อและสถานะข้อมูล Meta",
   },
+  "/settings/meta/page-ad-account-mapping": {
+    title: "Page–Ad Account Mapping",
+    subtitle:
+      "กำหนดบัญชีโฆษณาหลักให้แต่ละ Facebook Page",
+  },
 };
 
 function getPageInfo(pathname: string) {

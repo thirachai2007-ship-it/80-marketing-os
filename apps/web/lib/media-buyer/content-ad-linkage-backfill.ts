@@ -1,4 +1,5 @@
 import {
+  createHash,
   randomUUID,
 } from "node:crypto";
 
@@ -20,6 +21,7 @@ import {
   syncMetaInsights,
   type MetaInsightDateRange,
 } from "@/lib/meta/sync-insights";
+import { PAGE_AD_ACCOUNT_MAPPING_LOCK_KEY } from "@/lib/meta/page-ad-account-mapping-lock";
 import prisma from "@/lib/prisma";
 
 export const CONTENT_AD_LINKAGE_BACKFILL_VERSION =
@@ -28,7 +30,7 @@ export const CONTENT_AD_LINKAGE_BACKFILL_VERSION =
 const RUN_TYPE =
   "CONTENT_AD_LINKAGE_INSIGHT_BACKFILL_V1";
 const START_LOCK_KEY =
-  BigInt("8020260729");
+  PAGE_AD_ACCOUNT_MAPPING_LOCK_KEY;
 const ALLOWED_LOOKBACK_DAYS =
   new Set([7, 30, 90]);
 const DEFAULT_LOOKBACK_DAYS = 90;
@@ -57,6 +59,7 @@ type BackfillSummary = {
   accountName: string;
   accountTimezone: string;
   pageId: string | null;
+  mappingRevision: string | null;
   lookbackDays: number;
   dateRange: MetaInsightDateRange;
   stage: BackfillStage;
@@ -426,6 +429,13 @@ function parseBackfillSummary(
       "string"
         ? normalize(parsed.pageId) ||
           null
+        : null,
+    mappingRevision:
+      typeof parsed.mappingRevision ===
+        "string"
+        ? normalize(
+            parsed.mappingRevision,
+          ) || null
         : null,
     lookbackDays:
       parsed.lookbackDays!,
@@ -1967,6 +1977,75 @@ async function recoverStaleRun(
   }
 }
 
+async function mappingScopeSnapshot(
+  transaction: Prisma.TransactionClient,
+  {
+    metaConnectionId,
+    adAccountId,
+    pageId,
+  }: {
+    metaConnectionId: string;
+    adAccountId: string;
+    pageId: string | null;
+  },
+) {
+  const mappedPages =
+    await transaction.managedPage.findMany(
+      {
+        where: {
+          isActive: true,
+          metaConnectionId,
+          ...(pageId
+            ? {
+                id: pageId,
+              }
+            : {}),
+          OR: [
+            {
+              adAccountId,
+            },
+            {
+              adAccountMappings: {
+                some: {
+                  metaConnectionId,
+                  adAccountId,
+                  status:
+                    "ACTIVE",
+                },
+              },
+            },
+          ],
+        },
+        orderBy: {
+          id: "asc",
+        },
+        select: {
+          id: true,
+        },
+      },
+    );
+  const pageIds =
+    mappedPages.map(
+      (page) => page.id,
+    );
+
+  return {
+    pageIds,
+    revision: createHash(
+      "sha256",
+    )
+      .update(
+        JSON.stringify({
+          metaConnectionId,
+          adAccountId,
+          pageId,
+          pageIds,
+        }),
+      )
+      .digest("hex"),
+  };
+}
+
 async function createPlan({
   adAccountId,
   pageId,
@@ -2059,44 +2138,23 @@ async function createPlan({
         );
       }
 
-      const mappedPage =
-        await transaction.managedPage.findFirst(
+      const mappingScope =
+        await mappingScopeSnapshot(
+          transaction,
           {
-            where: {
-              isActive: true,
-              metaConnectionId:
-                account.metaConnectionId,
-              ...(pageId
-                ? {
-                    id: pageId,
-                  }
-                : {}),
-              OR: [
-                {
-                  adAccountId:
-                    account.id,
-                },
-                {
-                  adAccountMappings: {
-                    some: {
-                      metaConnectionId:
-                        account.metaConnectionId,
-                      adAccountId:
-                        account.id,
-                      status:
-                        "ACTIVE",
-                    },
-                  },
-                },
-              ],
-            },
-            select: {
-              id: true,
-            },
+            metaConnectionId:
+              account.metaConnectionId,
+            adAccountId:
+              account.id,
+            pageId:
+              pageId || null,
           },
         );
 
-      if (!mappedPage) {
+      if (
+        mappingScope.pageIds
+          .length === 0
+      ) {
         throw new Error(
           "บัญชีโฆษณานี้ยังไม่ได้ Mapping กับเพจ Active",
         );
@@ -2121,6 +2179,8 @@ async function createPlan({
         accountTimezone:
           account.timezone,
         pageId: pageId || null,
+        mappingRevision:
+          mappingScope.revision,
         lookbackDays,
         dateRange: {
           since: range.since,
@@ -2272,9 +2332,52 @@ async function claimPlan(
         );
       }
 
+      const mappingScope =
+        await mappingScopeSnapshot(
+          transaction,
+          {
+            metaConnectionId:
+              summary.metaConnectionId,
+            adAccountId:
+              summary.accountId,
+            pageId:
+              summary.pageId,
+          },
+        );
+
+      if (
+        mappingScope.pageIds
+          .length === 0
+      ) {
+        throw new Error(
+          "บัญชีโฆษณาของแผนยังไม่ได้ Mapping กับเพจ Active",
+        );
+      }
+
+      if (
+        !summary.mappingRevision &&
+        plan.status === "FAILED"
+      ) {
+        throw new Error(
+          "Mapping Revision ของแผนเก่าไม่พร้อม กรุณาเริ่มแผนใหม่",
+        );
+      }
+
+      if (
+        summary.mappingRevision &&
+        summary.mappingRevision !==
+          mappingScope.revision
+      ) {
+        throw new Error(
+          "Mapping ของแผน Backfill เปลี่ยนแล้ว กรุณาเริ่มแผนใหม่",
+        );
+      }
+
       const claimedAt = new Date();
       summary.claimToken =
         randomUUID();
+      summary.mappingRevision =
+        mappingScope.revision;
       summary.lastTickAt =
         claimedAt.toISOString();
       summary.lastError = null;

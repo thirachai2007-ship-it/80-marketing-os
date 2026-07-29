@@ -215,6 +215,9 @@ function errorStatus(
     ) ||
     message.includes(
       "ยังไม่ได้ Mapping",
+    ) ||
+    message.includes(
+      "Mapping ของแผน",
     )
   ) {
     return 409;
