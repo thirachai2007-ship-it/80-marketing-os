@@ -21,6 +21,35 @@ const CAMPAIGN_BATCH_SIZE = 5;
 const STALE_KERNEL_MS = 9 * 60 * 1000;
 const TRACKING_ACCOUNT_CONCURRENCY = 2;
 const MAXIMUM_CAMPAIGN_PAGES_PER_ACCOUNT = 50;
+const CAMPAIGN_FULL_INVENTORY_FRESHNESS_MS = 24 * 60 * 60 * 1000;
+
+async function hasRecentFullCampaignInventory(adAccountId: string) {
+  const runs = await prisma.metaSyncRun.findMany({
+    where: {
+      resourceType: "AD_OBJECTS_CAMPAIGNS",
+      trigger: "SCHEDULED_AUTONOMY",
+      status: "COMPLETED",
+      completedAt: {
+        gte: new Date(Date.now() - CAMPAIGN_FULL_INVENTORY_FRESHNESS_MS),
+      },
+    },
+    orderBy: { completedAt: "desc" },
+    take: 500,
+    select: { metadataJson: true },
+  });
+
+  return runs.some((run) => {
+    try {
+      const metadata = JSON.parse(run.metadataJson) as {
+        adAccountId?: unknown;
+        hasNext?: unknown;
+      };
+      return metadata.adAccountId === adAccountId && metadata.hasNext === false;
+    } catch {
+      return false;
+    }
+  });
+}
 
 async function syncAllCampaignPages(account: {
   id: string;
@@ -53,6 +82,24 @@ async function syncAllCampaignPages(account: {
   );
 }
 
+async function syncCampaignInventory(account: {
+  id: string;
+  metaConnectionId: string | null;
+}) {
+  if (!(await hasRecentFullCampaignInventory(account.id))) {
+    return syncAllCampaignPages(account);
+  }
+
+  return [
+    await syncMetaAdObjects({
+      adAccountId: account.id,
+      metaConnectionId: account.metaConnectionId ?? undefined,
+      resource: "campaigns",
+      trigger: "SCHEDULED_AUTONOMY",
+    }),
+  ];
+}
+
 async function trackAdAccount(account: {
   id: string;
   metaConnectionId: string | null;
@@ -60,7 +107,7 @@ async function trackAdAccount(account: {
   const results: Array<
     | Awaited<ReturnType<typeof syncMetaAdObjects>>
     | Awaited<ReturnType<typeof syncMetaInsights>>
-  > = await syncAllCampaignPages(account);
+  > = await syncCampaignInventory(account);
   for (const resource of ["adsets", "ads"] as const) {
     results.push(await syncMetaAdObjects({
       adAccountId: account.id,
