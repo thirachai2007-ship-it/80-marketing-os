@@ -128,6 +128,12 @@ export async function POST(
             ?.trim() ||
           undefined,
 
+        mediaType:
+          params
+            .get("mediaType")
+            ?.trim() ||
+          undefined,
+
         forceReanalyze:
           parseBoolean(
             params.get(
