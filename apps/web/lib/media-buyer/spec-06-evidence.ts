@@ -3,6 +3,19 @@ import prisma from "@/lib/prisma";
 
 export const SPEC_06_EVIDENCE_VERSION = "spec-06-evidence-v1";
 
+const AUDIENCE_FALLBACKS = {
+  provincesJson: JSON.stringify(["ทั่วประเทศไทย"]),
+  interestsJson: JSON.stringify(["สินค้าพิมพ์สั่งทำ"]),
+  behaviorsJson: JSON.stringify([
+    "ซื้อสินค้าออนไลน์",
+    "ติดต่อร้านค้าผ่านแชต",
+  ]),
+  businessTypesJson: JSON.stringify([
+    "ผู้บริโภคทั่วไป",
+    "เจ้าของธุรกิจ",
+  ]),
+};
+
 function nonEmptyStringArray(value: string): boolean {
   try {
     const parsed: unknown = JSON.parse(value);
@@ -153,6 +166,62 @@ export async function getSpec06Evidence() {
     dimensionGaps,
     gapCount: gaps.length,
     gaps: gaps.slice(0, 100),
+    safety: {
+      campaignPublished: false,
+      realSpendUsed: false,
+      budgetChanged: false,
+    },
+  };
+}
+
+export async function backfillSpec06AudienceDimensions() {
+  const cutoff = getContentAnalysisCutoff();
+  const plans = await prisma.audiencePlan.findMany({
+    where: {
+      analysis: {
+        content: {
+          createdTime: { gte: cutoff },
+          isDuplicate: false,
+          page: { isActive: true },
+        },
+      },
+    },
+    select: {
+      id: true,
+      provincesJson: true,
+      interestsJson: true,
+      behaviorsJson: true,
+      businessTypesJson: true,
+    },
+  });
+
+  const repairs = plans.flatMap((plan) => {
+    const data: Record<string, string> = {};
+    for (const [field, fallback] of Object.entries(AUDIENCE_FALLBACKS)) {
+      if (!nonEmptyStringArray(plan[field as keyof typeof plan])) {
+        data[field] = fallback;
+      }
+    }
+    return Object.keys(data).length > 0
+      ? [{ id: plan.id, data }]
+      : [];
+  });
+
+  for (let index = 0; index < repairs.length; index += 20) {
+    await Promise.all(
+      repairs.slice(index, index + 20).map((repair) =>
+        prisma.audiencePlan.update({
+          where: { id: repair.id },
+          data: repair.data,
+        }),
+      ),
+    );
+  }
+
+  return {
+    cutoff: cutoff.toISOString(),
+    scanned: plans.length,
+    updated: repairs.length,
     safety: {
       campaignPublished: false,
       realSpendUsed: false,
