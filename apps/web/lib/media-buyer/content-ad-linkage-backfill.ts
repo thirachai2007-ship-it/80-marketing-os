@@ -40,6 +40,10 @@ const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 50;
 const STALE_RUN_MS =
   15 * 60 * 1000;
+const COORDINATION_TRANSACTION_OPTIONS = {
+  maxWait: 15_000,
+  timeout: 30_000,
+} as const;
 
 type BackfillStage =
   | "CAMPAIGNS"
@@ -2227,6 +2231,7 @@ async function createPlan({
         summary,
       };
     },
+    COORDINATION_TRANSACTION_OPTIONS,
   );
 }
 
@@ -2421,6 +2426,7 @@ async function claimPlan(
         summary,
       };
     },
+    COORDINATION_TRANSACTION_OPTIONS,
   );
 }
 
