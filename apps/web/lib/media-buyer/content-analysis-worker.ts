@@ -2823,6 +2823,12 @@ export async function runContentAnalysisWorker(
     ContentAnalysisWorkerItemResult[] =
     [];
 
+  const claimedItems: Array<{
+    id: string;
+    attempts: number;
+    maxAttempts: number;
+  }> = [];
+
   for (
     let index = 0;
     index < batchSize;
@@ -2843,21 +2849,34 @@ export async function runContentAnalysisWorker(
       break;
     }
 
-    results.push(
-      await processQueueItem({
-        queueItemId:
-          claimed.id,
-
-        workerId,
-
-        attempt:
-          claimed.attempts,
-
-        maxAttempts:
-          claimed.maxAttempts,
-      }),
-    );
+    claimedItems.push(claimed);
   }
+
+  const concurrency = Math.min(3, claimedItems.length);
+  let nextIndex = 0;
+
+  async function processClaimedItems() {
+    while (nextIndex < claimedItems.length) {
+      const claimed = claimedItems[nextIndex];
+      nextIndex += 1;
+
+      results.push(
+        await processQueueItem({
+          queueItemId: claimed.id,
+          workerId,
+          attempt: claimed.attempts,
+          maxAttempts: claimed.maxAttempts,
+        }),
+      );
+    }
+  }
+
+  await Promise.all(
+    Array.from(
+      { length: concurrency },
+      () => processClaimedItems(),
+    ),
+  );
 
   const count = (
     status: WorkerItemStatus,
