@@ -1136,6 +1136,8 @@ export async function tickContentAnalysisAutoRun(
       result.batch
         ? result.batch.worker
         : null;
+    const actualAttempts =
+      worker?.scanned ?? 0;
     const completed =
       worker?.completed ?? 0;
     const failed =
@@ -1187,6 +1189,12 @@ export async function tickContentAnalysisAutoRun(
     const nextSummary: AutoRunSummary =
       {
         ...reservedSummary,
+        attemptedItems:
+          summary.completedItems +
+          summary.failedItems +
+          summary.requeuedItems +
+          summary.skippedItems +
+          actualAttempts,
         completedItems:
           reservedSummary.completedItems +
           completed,
