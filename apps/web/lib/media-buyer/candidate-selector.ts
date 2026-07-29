@@ -5,6 +5,11 @@ import {
 } from "@/lib/media-buyer/campaign-priority";
 
 import prisma from "@/lib/prisma";
+import { getContentAnalysisCutoff } from "@/lib/media-buyer/content-analysis-policy";
+import {
+  chooseFreshOrWinningFallback,
+  isFreshContent,
+} from "@/lib/media-buyer/content-fallback-policy";
 
 export const CANDIDATE_SELECTOR_VERSION =
   "candidate-selector-v3.1";
@@ -126,6 +131,7 @@ export type SelectedCampaignCandidate = {
   creativeFamilyKey: string;
 
   selectionReason: string;
+  selectionMode: "FRESH" | "WINNING_FALLBACK";
 };
 
 export type CandidateRejection = {
@@ -925,6 +931,13 @@ export async function selectCampaignCandidates(
           not:
             null,
         },
+
+        sourceContent: {
+          is: {
+            createdTime: { gte: getContentAnalysisCutoff() },
+            isDuplicate: false,
+          },
+        },
       },
 
       orderBy: [
@@ -1443,6 +1456,11 @@ export async function selectCampaignCandidates(
           creativeAssetStatus:
             asset.status,
         }),
+
+      selectionMode:
+        isFreshContent(content.createdTime)
+          ? "FRESH"
+          : "WINNING_FALLBACK",
     };
 
     eligibleCandidates.push(
@@ -1454,9 +1472,14 @@ export async function selectCampaignCandidates(
     compareCandidates,
   );
 
+  const candidatePool = chooseFreshOrWinningFallback(
+    eligibleCandidates,
+    options.useOldWinningContent,
+  );
+
   const selectedCandidates =
     selectDiversifiedCandidates(
-      eligibleCandidates,
+      candidatePool.candidates,
       maximumAds,
     );
 
@@ -1474,7 +1497,7 @@ export async function selectCampaignCandidates(
       rawAssets.length,
 
     eligibleCandidateCount:
-      eligibleCandidates.length,
+      candidatePool.candidates.length,
 
     selectedCandidateCount:
       selectedCandidates.length,
