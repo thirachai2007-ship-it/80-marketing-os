@@ -9,14 +9,14 @@ import {
 } from "@/lib/media-buyer/analysis-queue";
 
 export const ANALYSIS_BATCH_ORCHESTRATOR_VERSION =
-  "analysis-batch-orchestrator-v2";
+  "analysis-batch-orchestrator-v3";
 
 const CONTROL_RUN_TYPE =
   "CONTENT_ANALYSIS_BATCH_ORCHESTRATOR_CONTROL";
 const BATCH_RUN_TYPE =
   "CONTENT_ANALYSIS_BATCH_ORCHESTRATOR";
 const DEFAULT_BATCH_SIZE = 1;
-const MAX_BATCH_SIZE = 5;
+const MAX_BATCH_SIZE = 10;
 
 type OrchestratorControlStatus =
   | "ACTIVE"
