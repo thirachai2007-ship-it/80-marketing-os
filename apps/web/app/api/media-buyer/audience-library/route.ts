@@ -5,6 +5,7 @@ import {
 
 import {
   AUDIENCE_LIBRARY_VERSION,
+  adjustAudienceDraft,
   buildAudienceDraftsFromPlans,
   createAudienceDraft,
   getAudienceAsset,
@@ -12,6 +13,7 @@ import {
   setAudienceActiveState,
   updateAudienceApproval,
   type AudienceApprovalStatus,
+  type AudienceVersionInput,
   type AudienceType,
 } from "@/lib/media-buyer/audience-library";
 
@@ -198,6 +200,7 @@ export async function GET(
       "BUILD_FROM_AUDIENCE_PLAN",
       "DUPLICATE_PREVENTION",
       "VERSION_1",
+      "ADJUST_WITH_NEW_VERSION",
       "SOURCE_RELATIONSHIPS",
       "LIST_AND_DETAIL",
       "APPROVAL",
@@ -301,6 +304,28 @@ export async function POST(
       await readJsonBody(
         request,
       );
+
+    if (action === "adjust-draft") {
+      const version =
+        body.version &&
+        typeof body.version === "object" &&
+        !Array.isArray(body.version)
+          ? (body.version as Partial<AudienceVersionInput>)
+          : {};
+      const result = await adjustAudienceDraft({
+        audienceAssetId: String(body.audienceAssetId ?? ""),
+        changeReason: String(body.changeReason ?? ""),
+        version,
+      });
+      return NextResponse.json({
+        ok: result.status !== "FAILED" && result.status !== "SKIPPED",
+        mode: "ADJUST_DRAFT",
+        metaMutationExecuted: false,
+        realSpendUsed: false,
+        ownerApprovalRequired: true,
+        ...result,
+      });
+    }
 
     if (
       action ===
