@@ -133,6 +133,18 @@ export async function POST(
             params.get(
               "forceReanalyze",
             ),
+          ) ||
+          parseBoolean(
+            params.get(
+              "modalityV2Only",
+            ),
+          ),
+
+        modalityV2Only:
+          parseBoolean(
+            params.get(
+              "modalityV2Only",
+            ),
           ),
 
         queuePendingContent:
