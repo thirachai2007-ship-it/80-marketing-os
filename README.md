@@ -17,3 +17,7 @@ Build the smartest AI-powered operating system for garment printing and sticker 
 - CEO Dashboard
 
 Created by Lertsak
+
+## Project policy
+
+- [Master Spec owner amendments](docs/master-spec-amendments.md)
