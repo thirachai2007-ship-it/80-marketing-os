@@ -10,13 +10,13 @@ export async function getSpec20Evidence() {
     prisma.metaSyncRun.findMany({
       where: { trigger: "SCHEDULED_AUTONOMY", startedAt: { gte: freshnessCutoff } },
       orderBy: { startedAt: "desc" },
-      select: { id: true, resourceType: true, status: true, itemsFound: true, startedAt: true, completedAt: true, metadataJson: true },
+      select: { id: true, resourceType: true, status: true, itemsFound: true, errorCode: true, errorMessage: true, startedAt: true, completedAt: true, metadataJson: true },
     }),
     prisma.mediaBuyerRun.findFirst({ where: { runType: "AUTONOMY_KERNEL_V1" }, orderBy: { startedAt: "desc" }, select: { status: true, startedAt: true, completedAt: true, summaryJson: true } }),
     prisma.metaAdInsight.findFirst({ orderBy: { updatedAt: "desc" }, select: { updatedAt: true, dateStop: true } }),
   ]);
 
-  const gaps: Array<{ reason: string; adAccountId?: string; resourceType?: string }> = [];
+  const gaps: Array<{ reason: string; adAccountId?: string; resourceType?: string; errorCode?: string | null; errorMessage?: string | null }> = [];
   if (accounts.length === 0) gaps.push({ reason: "NO_ACTIVE_AD_ACCOUNTS" });
   for (const account of accounts) {
     for (const resourceType of REQUIRED_RESOURCES) {
@@ -24,7 +24,13 @@ export async function getSpec20Evidence() {
         try { return item.resourceType === resourceType && JSON.parse(item.metadataJson).adAccountId === account.id; } catch { return false; }
       });
       if (!run) gaps.push({ reason: "FRESH_SCHEDULED_SYNC_MISSING", adAccountId: account.id, resourceType });
-      else if (run.status !== "COMPLETED") gaps.push({ reason: "SCHEDULED_SYNC_NOT_COMPLETED", adAccountId: account.id, resourceType });
+      else if (run.status !== "COMPLETED") gaps.push({
+        reason: "SCHEDULED_SYNC_NOT_COMPLETED",
+        adAccountId: account.id,
+        resourceType,
+        errorCode: run.errorCode,
+        errorMessage: run.errorMessage,
+      });
     }
   }
   let trackingStepCompleted = false;
