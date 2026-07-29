@@ -34,10 +34,16 @@ async function trackAdAccount(account: {
       trigger: "SCHEDULED_AUTONOMY",
     }));
   }
+  const latestClosedDay = new Date();
+  latestClosedDay.setUTCDate(latestClosedDay.getUTCDate() - 1);
+  const latestClosedDate = latestClosedDay.toISOString().slice(0, 10);
   results.push(await syncMetaInsights({
     adAccountId: account.id,
     metaConnectionId: account.metaConnectionId ?? undefined,
-    datePreset: "last_7d",
+    dateRange: {
+      since: latestClosedDate,
+      until: latestClosedDate,
+    },
     trigger: "SCHEDULED_AUTONOMY",
   }));
   return results;
