@@ -8,7 +8,7 @@
     },
     {
       "path": "/api/cron/content-analysis",
-      "schedule": "*/5 * * * *"
+      "schedule": "*/2 * * * *"
     }
   ]
 }
