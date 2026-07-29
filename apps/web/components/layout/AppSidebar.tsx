@@ -4,21 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import {
-  BarChart3,
   Bot,
   Boxes,
-  BrainCircuit,
   ChevronRight,
-  CircleDollarSign,
-  Database,
-  Factory,
-  LayoutDashboard,
-  Megaphone,
-  Palette,
+  ShieldCheck,
   Settings,
-  ShoppingCart,
   Sparkles,
-  Users,
 } from "lucide-react";
 
 type MenuItem = {
@@ -38,72 +29,12 @@ type MenuGroup = {
 
 const menuGroups: MenuGroup[] = [
   {
-    title: "MAIN",
+    title: "OWNER",
     items: [
       {
-        title: "Dashboard",
+        title: "Approval Center",
         href: "/",
-        icon: LayoutDashboard,
-      },
-    ],
-  },
-  {
-    title: "AI MODULES",
-    items: [
-      {
-        title: "Marketing AI",
-        href: "/marketing",
-        icon: Megaphone,
-      },
-      {
-        title: "Content Intelligence",
-        href: "/marketing/content-intelligence",
-        icon: BrainCircuit,
-      },
-      {
-        title: "Sales AI",
-        icon: ShoppingCart,
-        badge: "Soon",
-      },
-      {
-        title: "Graphic AI",
-        icon: Palette,
-        badge: "Soon",
-      },
-      {
-        title: "Production AI",
-        icon: Factory,
-        badge: "Soon",
-      },
-      {
-        title: "HR AI",
-        icon: Users,
-        badge: "Soon",
-      },
-      {
-        title: "Finance AI",
-        icon: CircleDollarSign,
-        badge: "Soon",
-      },
-    ],
-  },
-  {
-    title: "SYSTEM",
-    items: [
-      {
-        title: "Knowledge",
-        icon: Database,
-        badge: "Soon",
-      },
-      {
-        title: "Analytics",
-        icon: BarChart3,
-        badge: "Soon",
-      },
-      {
-        title: "Settings",
-        href: "/settings/meta",
-        icon: Settings,
+        icon: ShieldCheck,
       },
     ],
   },
