@@ -8,6 +8,12 @@ import {
 export const CONTENT_ANALYSIS_AUTO_RUN_VERSION =
   "content-analysis-auto-run-scheduler-v2";
 
+const SUPPORTED_STORED_SCHEDULER_VERSIONS =
+  new Set([
+    "content-analysis-auto-run-scheduler-v1",
+    CONTENT_ANALYSIS_AUTO_RUN_VERSION,
+  ]);
+
 const AUTO_RUN_TYPE =
   "CONTENT_ANALYSIS_AUTO_RUN_PLAN";
 const DEFAULT_BATCH_SIZE = 1;
@@ -126,8 +132,11 @@ function parseSummary(
   }
 
   if (
-    parsed.schedulerVersion !==
-      CONTENT_ANALYSIS_AUTO_RUN_VERSION ||
+    typeof parsed.schedulerVersion !==
+      "string" ||
+    !SUPPORTED_STORED_SCHEDULER_VERSIONS.has(
+      parsed.schedulerVersion,
+    ) ||
     parsed.ownerApproved !== true ||
     parsed.approvalSource !==
       "OWNER_EXPLICIT_CONFIRMATION" ||
