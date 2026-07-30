@@ -65,6 +65,9 @@ export async function getSpec33Evidence() {
       .map((adSet) => adSet.id),
   );
   const accountIds = new Set([
+    ...audienceInventory.productionData.coverage.map(
+      (account) => account.adAccountId,
+    ),
     ...campaigns.map((campaign) => campaign.adAccountId),
     ...adSets.map((adSet) => adSet.adAccountId),
   ]);
