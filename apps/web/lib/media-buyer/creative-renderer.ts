@@ -1,11 +1,6 @@
 import {
   createHash,
 } from "node:crypto";
-import {
-  mkdir,
-  writeFile,
-} from "node:fs/promises";
-import path from "node:path";
 
 import prisma from "@/lib/prisma";
 
@@ -253,14 +248,6 @@ function getMimeType(
   }
 
   return "image/png";
-}
-
-function getExtension(
-  outputFormat: OutputFormat,
-): string {
-  return outputFormat === "jpeg"
-    ? "jpg"
-    : outputFormat;
 }
 
 function getRequestedSize(
@@ -550,54 +537,14 @@ async function callOpenAIImageEdit(input: {
 }
 
 async function saveRenderedImage(input: {
-  creativeAssetId: string;
-  revisionVersion: number;
+  creativeRevisionId: string;
   outputBytes: Uint8Array;
   outputFormat: OutputFormat;
 }): Promise<{
   publicUrl: string;
   fingerprint: string;
+  base64Data: string;
 }> {
-  const extension =
-    getExtension(
-      input.outputFormat,
-    );
-
-  const relativeDirectory =
-    path.join(
-      "generated",
-      "creative-assets",
-      input.creativeAssetId,
-    );
-
-  const absoluteDirectory =
-    path.join(
-      process.cwd(),
-      "public",
-      relativeDirectory,
-    );
-
-  await mkdir(
-    absoluteDirectory,
-    {
-      recursive: true,
-    },
-  );
-
-  const filename =
-    `revision-${input.revisionVersion}.${extension}`;
-
-  const absolutePath =
-    path.join(
-      absoluteDirectory,
-      filename,
-    );
-
-  await writeFile(
-    absolutePath,
-    input.outputBytes,
-  );
-
   const fingerprint =
     createHash("sha256")
       .update(
@@ -606,11 +553,15 @@ async function saveRenderedImage(input: {
       .digest("hex");
 
   const publicUrl =
-    `/${relativeDirectory.replaceAll("\\", "/")}/${filename}`;
+    `/api/media-buyer/creative-media/${input.creativeRevisionId}`;
 
   return {
     publicUrl,
     fingerprint,
+    base64Data:
+      Buffer.from(
+        input.outputBytes,
+      ).toString("base64"),
   };
 }
 
@@ -1295,11 +1246,8 @@ export async function renderCreativeRevision(
 
     const saved =
       await saveRenderedImage({
-        creativeAssetId:
-          asset.id,
-
-        revisionVersion:
-          revision.version,
+        creativeRevisionId:
+          revision.id,
 
         outputBytes:
           rendered.outputBytes,
@@ -1336,6 +1284,12 @@ export async function renderCreativeRevision(
 
           outputFormat:
             rendered.outputFormat,
+
+          storage:
+            "DATABASE_BASE64_V1",
+
+          base64Data:
+            saved.base64Data,
 
           sourceUrl,
 
