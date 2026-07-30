@@ -294,7 +294,7 @@ function retryDelayMs(
   );
 }
 
-export function loadMetaAdapterConfig():
+export function loadMetaAdapterConfig(options?: { accessToken?: string }):
   MetaAdapterConfig {
   const graphApiVersion =
     ensureNonEmpty(
@@ -306,8 +306,9 @@ export function loadMetaAdapterConfig():
 
   const accessToken =
     ensureNonEmpty(
-      process.env
-        .META_ACCESS_TOKEN ??
+      options?.accessToken ??
+        process.env
+          .META_ACCESS_TOKEN ??
         "",
       "META_ACCESS_TOKEN",
     );
