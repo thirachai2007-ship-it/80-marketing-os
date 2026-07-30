@@ -1558,6 +1558,19 @@ export async function runCreativeRenderingBatch(
             isActive:
               true,
 
+            sourceContent: {
+              is: {
+                productConfidence: {
+                  gte: 75,
+                },
+
+                productEvidence: {
+                  contains:
+                    "source=AI",
+                },
+              },
+            },
+
             ...(options.pageId
               ? {
                   pageId:

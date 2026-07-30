@@ -26,11 +26,15 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json().catch(() => ({})) as { creativeAssetId?: string };
+    const body = await request.json().catch(() => ({})) as {
+      creativeAssetId?: string;
+      productCategory?: string;
+    };
     return NextResponse.json({
       ok: true,
       ...(await prepareCreativeGenerationSet({
         creativeAssetId: body.creativeAssetId?.trim() || undefined,
+        productCategory: body.productCategory?.trim().toUpperCase() || undefined,
       })),
     });
   } catch (error) {
