@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
 import prisma from "@/lib/prisma";
+import { AUTONOMOUS_PAUSED_ACTION } from "@/lib/media-buyer/autonomous-paused-authorization";
 
 import {
   MetaMarketingApiAdapter,
@@ -558,6 +559,7 @@ export async function orchestrateMetaPublish(
             action: {
               in: [
                 "OWNER_APPROVE_CAMPAIGN_V1",
+                AUTONOMOUS_PAUSED_ACTION,
                 "BUILD_META_PUBLISH_PAYLOAD_V1",
                 "VALIDATE_META_PUBLISH_EXECUTION_V1",
                 "SIMULATE_META_PUBLISH_EXECUTION_V1",
@@ -724,6 +726,10 @@ export async function orchestrateMetaPublish(
   }
 
   const approvalDecision =
+    latestByAction(
+      draft.decisions,
+      AUTONOMOUS_PAUSED_ACTION,
+    ) ??
     latestByAction(
       draft.decisions,
       "OWNER_APPROVE_CAMPAIGN_V1",

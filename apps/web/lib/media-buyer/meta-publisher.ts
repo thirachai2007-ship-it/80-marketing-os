@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
 import prisma from "@/lib/prisma";
+import { AUTONOMOUS_PAUSED_ACTION } from "@/lib/media-buyer/autonomous-paused-authorization";
 
 export const META_PUBLISHER_VERSION =
   "meta-publisher-v1";
@@ -376,6 +377,10 @@ export async function buildMetaPublishPayload(
   }
 
   const approvalDecision =
+    getLatestDecision(
+      draft.decisions,
+      AUTONOMOUS_PAUSED_ACTION,
+    ) ??
     getLatestDecision(
       draft.decisions,
       "OWNER_APPROVE_CAMPAIGN_V1",

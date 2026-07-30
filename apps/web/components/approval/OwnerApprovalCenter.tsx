@@ -88,6 +88,8 @@ export default function OwnerApprovalCenter() {
   const [error, setError] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [preparingMeta, setPreparingMeta] = useState(false);
+  const [metaPreparationMessage, setMetaPreparationMessage] = useState("");
 
   const load = useCallback(async () => {
     setError("");
@@ -298,6 +300,41 @@ export default function OwnerApprovalCenter() {
     }
   }
 
+  async function prepareMetaPaused() {
+    setPreparingMeta(true);
+    setError("");
+    setMetaPreparationMessage("");
+    try {
+      const response = await fetch(
+        "/api/media-buyer/autonomous-meta-preparer",
+        { method: "POST" },
+      );
+      const result = (await response.json()) as {
+        ok: boolean;
+        completed?: number;
+        failed?: number;
+        error?: string;
+      };
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || `เตรียม Meta ไม่สำเร็จ ${result.failed ?? 0} รายการ`);
+      }
+      setMetaPreparationMessage(
+        result.completed
+          ? `สร้างใน Meta แบบ PAUSED สำเร็จ ${result.completed} แคมเปญ`
+          : "ไม่มีแคมเปญที่ต้องสร้างเพิ่มใน Meta",
+      );
+      await load();
+    } catch (prepareError) {
+      setError(
+        prepareError instanceof Error
+          ? prepareError.message
+          : "เตรียม Meta แบบ PAUSED ไม่สำเร็จ",
+      );
+    } finally {
+      setPreparingMeta(false);
+    }
+  }
+
   const waiting =
     data?.items.filter((item) => item.draftStatus === "READY_FOR_APPROVAL") ??
     [];
@@ -342,6 +379,26 @@ export default function OwnerApprovalCenter() {
           {error}
         </div>
       )}
+
+      <div className="mb-4 rounded-2xl border border-cyan-200 bg-cyan-50 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="font-semibold text-cyan-950">Autonomous Meta Preparation</p>
+            <p className="mt-1 text-sm text-cyan-800">Cron ทำงานอัตโนมัติ ปุ่มนี้ใช้ตรวจหรือสั่งทำทันที ทุก Object จะเป็น PAUSED</p>
+          </div>
+          <button
+            type="button"
+            disabled={preparingMeta}
+            onClick={() => void prepareMetaPaused()}
+            className="rounded-xl bg-cyan-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+          >
+            {preparingMeta ? "กำลังเตรียมใน Meta..." : "เตรียมใน Meta ตอนนี้"}
+          </button>
+        </div>
+        {metaPreparationMessage && (
+          <p className="mt-3 text-sm font-semibold text-emerald-700">{metaPreparationMessage}</p>
+        )}
+      </div>
 
       {!data && !error && (
         <div className="flex items-center justify-center gap-3 rounded-3xl bg-white p-12 text-slate-500 shadow-sm">
