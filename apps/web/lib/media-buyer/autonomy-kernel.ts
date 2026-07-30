@@ -7,6 +7,7 @@ import { runContentAdLinkageBackfillBatch } from "@/lib/media-buyer/content-ad-l
 import { runBalancedAnalysisBatch } from "@/lib/media-buyer/content-analysis-coverage";
 import { runCampaignBuilderBatch } from "@/lib/media-buyer/campaign-builder";
 import { runPublishingQueueBatch } from "@/lib/media-buyer/publishing-queue";
+import { runCampaignRenewalPreparation } from "@/lib/media-buyer/campaign-renewal-preparer";
 
 export const AUTONOMY_KERNEL_VERSION =
   "80ai-autonomy-kernel-v1";
@@ -371,6 +372,12 @@ export async function runAutonomyKernel() {
         runCampaignBuilderBatch({
           batchSize: CAMPAIGN_BATCH_SIZE,
         }),
+      ),
+    );
+
+    steps.push(
+      await runStep("CAMPAIGN_RENEWAL_PREPARATION", () =>
+        runCampaignRenewalPreparation(),
       ),
     );
 
