@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Check, Film, RefreshCw, ShieldCheck, Volume2 } from "lucide-react";
+import { Check, Film, RefreshCw, ShieldCheck, Volume2, X } from "lucide-react";
 
 /* Meta thumbnail hosts are signed and vary per page. */
 /* eslint-disable @next/next/no-img-element */
@@ -18,6 +18,7 @@ export default function VideoEditingWorkspace() {
   const [plan, setPlan] = useState<EditPlan | null>(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [playerOpen, setPlayerOpen] = useState(false);
 
   const load = useCallback(async () => {
     const response = await fetch("/api/media-buyer/video-editing-engine", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "SYNC_LIBRARY" }) });
@@ -32,6 +33,14 @@ export default function VideoEditingWorkspace() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load().catch((error: Error) => setMessage(error.message));
   }, [load]);
+  useEffect(() => {
+    if (!playerOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setPlayerOpen(false); };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => { document.body.style.overflow = previousOverflow; window.removeEventListener("keydown", closeOnEscape); };
+  }, [playerOpen]);
 
   async function createPlan() {
     if (!creativeRevisionId) { setMessage("กรุณาเลือกวิดีโอ"); return; }
@@ -53,23 +62,19 @@ export default function VideoEditingWorkspace() {
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="mb-4 flex items-center justify-between"><div><h2 className="font-bold text-slate-900">สร้างแผนตัดต่อ</h2><p className="mt-1 text-sm text-slate-500">วิดีโอของทุกเพจที่วิเคราะห์เสร็จแล้วในช่วง 75 วัน · {new Set(candidates.map((candidate) => candidate.pageId)).size} เพจ · {candidates.length} วิดีโอ</p></div><button onClick={() => void load()} className="rounded-xl border border-slate-200 p-2" aria-label="โหลดคลังวิดีโอใหม่"><RefreshCw size={17} /></button></div>
       <div className="mb-6">
-        <div className="mb-3 flex items-center justify-between"><div><h3 className="font-semibold text-slate-900">เลือกวิดีโอจากอัลบั้ม Reels</h3><p className="text-sm text-slate-500">กดที่ภาพวิดีโอ การ์ดที่เลือกจะเปลี่ยนเป็น Player เล่นคลิปและเปิดเสียงได้ทันที</p></div></div>
+        <div className="mb-3 flex items-center justify-between"><div><h3 className="font-semibold text-slate-900">เลือกวิดีโอจากอัลบั้ม Reels</h3><p className="text-sm text-slate-500">กดที่ภาพวิดีโอเพื่อเปิด Player เต็มคลิปด้านหน้าจอ คลิกพื้นที่ว่างรอบ Player เพื่อปิด</p></div></div>
         <div className="grid max-h-[72vh] grid-cols-2 gap-3 overflow-y-auto pr-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
           {candidates.map((candidate) => {
             const isSelected = candidate.id === creativeRevisionId;
-            if (isSelected) return <div key={candidate.id} className="relative col-span-2 overflow-hidden rounded-2xl border-4 border-cyan-500 bg-black shadow-lg shadow-cyan-200">
-              {candidate.facebookEmbedUrl ? <iframe title={`วิดีโอ ${candidate.pageName}`} src={candidate.facebookEmbedUrl} className="aspect-[9/16] h-full min-h-[520px] w-full border-0 bg-black" allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share" allowFullScreen /> : candidate.sourceUrl && <video className="aspect-[9/16] h-full min-h-[520px] w-full bg-black object-contain" controls playsInline preload="metadata" poster={candidate.thumbnailUrl ?? undefined} src={candidate.sourceUrl} />}
-              <span className="pointer-events-none absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-cyan-500 text-white shadow-lg"><Check size={20} strokeWidth={3} /></span>
-              <div className="bg-slate-950 p-3 text-white"><p className="text-xs font-semibold">{candidate.pageName}</p><p className="text-[11px] text-cyan-200">{candidate.productCategory}</p></div>
-            </div>;
-            return <button key={candidate.id} type="button" aria-pressed={false} aria-label={`เลือกวิดีโอ ${candidate.pageName} ${candidate.productCategory}`} onClick={() => { setCreativeRevisionId(candidate.id); setPlan(null); setMessage(""); }} className="group relative overflow-hidden rounded-2xl border-4 border-transparent text-left shadow-sm transition hover:border-cyan-200 focus:outline-none focus:ring-4 focus:ring-cyan-200">
+            return <button key={candidate.id} type="button" aria-pressed={isSelected} aria-label={`เปิดวิดีโอ ${candidate.pageName} ${candidate.productCategory}`} onClick={() => { setCreativeRevisionId(candidate.id); setPlan(null); setMessage(""); setPlayerOpen(true); }} className={`group relative overflow-hidden rounded-2xl border-4 text-left shadow-sm transition focus:outline-none focus:ring-4 focus:ring-cyan-200 ${isSelected ? "border-cyan-500 shadow-cyan-200" : "border-transparent hover:border-cyan-200"}`}>
               <div className="aspect-[9/16] bg-slate-900">{candidate.thumbnailUrl ? <img loading="lazy" src={candidate.thumbnailUrl} alt="" className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-slate-400"><Film size={34} /></div>}</div>
               <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/75 to-transparent p-3 pt-10 text-white"><p className="line-clamp-2 text-xs font-semibold">{candidate.pageName}</p><p className="mt-1 text-[11px] text-cyan-200">{candidate.productCategory}</p>{candidate.hasEditPlan && <span className="mt-1 inline-block rounded-full bg-violet-500/90 px-2 py-0.5 text-[10px]">มีแผนแล้ว</span>}</div>
+              {isSelected && <span className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-cyan-500 text-white shadow-lg"><Check size={20} strokeWidth={3} /></span>}
             </button>;
           })}
         </div>
       </div>
-      {selected && <p className="mb-4 flex items-center gap-2 rounded-xl bg-cyan-50 px-4 py-3 text-sm font-medium text-cyan-900"><Volume2 size={18} />วิดีโอที่เลือกเล่นได้จากการ์ดกรอบสีฟ้าด้านบน พร้อมเสียงและปุ่มเต็มจอของ Facebook</p>}
+      {selected && <p className="mb-4 flex items-center gap-2 rounded-xl bg-cyan-50 px-4 py-3 text-sm font-medium text-cyan-900"><Volume2 size={18} />คลิปที่เลือก: {selected.pageName} · กดภาพเดิมอีกครั้งเพื่อเปิด Player</p>}
       <div className="grid gap-4 md:grid-cols-2">
         <label className="text-sm font-medium text-slate-700">Placement<select value={placement} onChange={(event) => setPlacement(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2"><option value="REELS">Reels 9:16</option><option value="STORIES">Stories 9:16</option><option value="FEED">Feed 4:5</option><option value="IN_STREAM">In-stream 16:9</option></select></label>
         <label className="text-sm font-medium text-slate-700">ความยาวเป้าหมาย (วินาที)<input type="number" min={6} max={60} value={durationSeconds} onChange={(event) => setDurationSeconds(Number(event.target.value))} className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
@@ -78,6 +83,15 @@ export default function VideoEditingWorkspace() {
       <button disabled={busy || !creativeRevisionId} onClick={() => void createPlan()} className="mt-4 rounded-xl bg-cyan-600 px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">สร้างแผนและส่งรอตรวจ</button>
       {candidates.length === 0 && <p className="mt-3 text-sm text-amber-700">ยังไม่มี Video Revision ที่พร้อมวางแผนตัดต่อ</p>}
       {message && <p className="mt-3 text-sm text-teal-700">{message}</p>}
+      {playerOpen && selected && <div role="dialog" aria-modal="true" aria-label={`Player ${selected.pageName}`} onClick={(event) => { if (event.target === event.currentTarget) setPlayerOpen(false); }} className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-3 backdrop-blur-sm sm:p-6">
+        <div className="relative flex max-h-[96vh] max-w-[96vw] flex-col items-center" onClick={(event) => event.stopPropagation()}>
+          <button type="button" onClick={() => setPlayerOpen(false)} aria-label="ปิด Player" className="absolute -right-2 -top-2 z-10 rounded-full bg-white p-2 text-slate-900 shadow-xl sm:-right-12 sm:top-0"><X size={24} /></button>
+          <div className="flex max-h-[90vh] max-w-[90vw] items-center justify-center overflow-hidden rounded-2xl bg-black shadow-2xl">
+            {selected.facebookEmbedUrl ? <iframe key={selected.id} title={`วิดีโอ ${selected.pageName}`} src={selected.facebookEmbedUrl} className="aspect-[9/16] h-[90vh] max-h-[90vh] w-[50.625vh] max-w-[90vw] border-0 bg-black" allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share" allowFullScreen /> : selected.sourceUrl && <video key={selected.id} className="max-h-[90vh] max-w-[90vw] bg-black object-contain" controls autoPlay playsInline preload="metadata" poster={selected.thumbnailUrl ?? undefined} src={selected.sourceUrl} />}
+          </div>
+          <p className="mt-3 rounded-full bg-black/70 px-4 py-2 text-center text-sm text-white">คลิกพื้นที่มืดด้านนอก หรือกด Esc เพื่อปิด Player</p>
+        </div>
+      </div>}
     </section>
     {plan && <section className="rounded-2xl border border-cyan-200 bg-cyan-50 p-5"><div className="flex items-center gap-2 text-cyan-900"><ShieldCheck size={20} /><h2 className="font-bold">แผนพร้อมให้ Owner ตรวจ</h2></div><p className="mt-2 text-sm text-cyan-800">{plan.placement} · {plan.aspectRatio} · {plan.durationMs / 1000} วินาที · เสียง {plan.audio.normalizeLufs} LUFS · คำบรรยาย {plan.captions.enabled ? "เปิด" : "ปิด"}</p><div className="mt-4 space-y-2">{plan.timeline.map((item, index) => <div key={`${item.operation}-${index}`} className="rounded-xl bg-white p-3 text-sm"><span className="font-bold text-slate-900">{item.operation}</span><span className="ml-2 text-slate-500">{item.fromMs / 1000}s–{item.toMs / 1000}s</span>{item.overlayText && <p className="mt-1 text-slate-700">{item.overlayText}</p>}</div>)}</div></section>}
   </div>;
