@@ -11,6 +11,7 @@ const GOVERNED_DECISION_TYPES = new Set([
   "BUDGET_PLANNING",
   "CREATIVE_REVISION_GENERATION",
   "CREATIVE_OPTIMIZATION_V3",
+  "CONTINUOUS_OUTCOME_LEARNING",
 ]);
 
 function parsePolicy(value: string | null) {
