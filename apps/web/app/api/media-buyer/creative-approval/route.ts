@@ -144,7 +144,7 @@ export async function POST(request: NextRequest) {
         confidence: 100,
         inputJson: JSON.stringify({ creativeRevisionId, decision, ownerName, expectedFingerprint }),
         outputJson: JSON.stringify({ approvalStatus: approved ? "APPROVED" : "REJECTED", paidRenderExecuted: false }),
-        policyJson: JSON.stringify({ explicitOwnerConfirmation: true, paidRenderExecuted: false, campaignPublished: false, metaMutationExecuted: false, realAdSpendUsed: false }),
+        policyJson: JSON.stringify({ decisionActor: "OWNER", aiDecision: false, explicitOwnerConfirmation: true, paidRenderExecuted: false, campaignPublished: false, metaMutationExecuted: false, realAdSpendUsed: false }),
         policyReference: "Master Spec 56",
       },
     }),
