@@ -21,6 +21,11 @@ function fingerprint(input: {
   })).digest("hex");
 }
 
+function isApprovalMetadataValid(metadata: Record<string, unknown>, productCategory: string) {
+  return isValidatedCreativeMetadata(metadata, productCategory) ||
+    (metadata.videoEditValidated === true && metadata.rightsBasis === "OWNED_META_PAGE");
+}
+
 export async function GET(request: NextRequest) {
   if (!hasValidOwnerSession(request)) {
     return NextResponse.json({ ok: false, authenticated: false, error: "Owner authentication required" }, { status: 401 });
@@ -29,7 +34,10 @@ export async function GET(request: NextRequest) {
     where: {
       status: "NEED_APPROVAL",
       approvalStatus: "NOT_SUBMITTED",
-      metadataJson: { contains: "\"visualProductValidated\":true" },
+      OR: [
+        { metadataJson: { contains: "\"visualProductValidated\":true" } },
+        { metadataJson: { contains: "\"videoEditValidated\":true" } },
+      ],
       creativeAsset: { isActive: true },
     },
     orderBy: { updatedAt: "desc" },
@@ -66,7 +74,7 @@ export async function GET(request: NextRequest) {
     items: revisions.filter((revision) => {
       let metadata: Record<string, unknown> = {};
       try { metadata = JSON.parse(revision.metadataJson ?? "{}") as Record<string, unknown>; } catch {}
-      return isValidatedCreativeMetadata(metadata, revision.creativeAsset.productCategory);
+      return isApprovalMetadataValid(metadata, revision.creativeAsset.productCategory);
     }).map((revision) => ({
       id: revision.id,
       version: revision.version,
@@ -118,7 +126,7 @@ export async function POST(request: NextRequest) {
   if (!revision) return NextResponse.json({ ok: false, error: "ไม่พบ Creative Revision" }, { status: 404 });
   let metadata: Record<string, unknown> = {};
   try { metadata = JSON.parse(revision.metadataJson ?? "{}") as Record<string, unknown>; } catch {}
-  if (!isValidatedCreativeMetadata(metadata, revision.creativeAsset.productCategory)) {
+  if (!isApprovalMetadataValid(metadata, revision.creativeAsset.productCategory)) {
     return NextResponse.json({ ok: false, error: "Creative นี้ไม่ผ่านการยืนยันประเภทสินค้าจากภาพจริง" }, { status: 409 });
   }
   if (revision.status !== "NEED_APPROVAL" || revision.approvalStatus !== "NOT_SUBMITTED") {
