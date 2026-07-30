@@ -9,7 +9,9 @@ import ffmpegPath from "ffmpeg-static";
 import prisma from "@/lib/prisma";
 
 export const VIDEO_EDITING_ENGINE_VERSION = "video-editing-engine-v2";
+export const VIDEO_EDITING_LIBRARY_VERSION = "video-editing-library-v1";
 const execFileAsync = promisify(execFile);
+const VIDEO_LIBRARY_WINDOW_DAYS = 75;
 
 function parseObject(value: string | null) {
   try { const parsed = value ? JSON.parse(value) as unknown : {}; return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {}; }
@@ -150,6 +152,76 @@ export async function renderApprovedVideoEdit(creativeRevisionId: string) {
   } finally { await rm(directory, { recursive: true, force: true }); }
 }
 
+export async function syncVideoEditingLibrary() {
+  const createdAfter = new Date(Date.now() - VIDEO_LIBRARY_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  const contents = await prisma.pageContent.findMany({
+    where: {
+      page: { isActive: true }, analysisStatus: "COMPLETED", isDuplicate: false,
+      productCategory: { not: "UNKNOWN" },
+      mediaType: { contains: "VIDEO", mode: "insensitive" },
+      mediaUrl: { not: null }, createdTime: { gte: createdAfter },
+    },
+    orderBy: [{ createdTime: "desc" }, { id: "asc" }], take: 500,
+    select: {
+      id: true, pageId: true, pageName: true, productCategory: true, mediaType: true,
+      mediaUrl: true, thumbnailUrl: true, message: true, contentFingerprint: true, fingerprint: true,
+      analysis: { select: { id: true } },
+      creativeAssets: { where: { isActive: true }, select: { id: true }, take: 1 },
+    },
+  });
+  const missing = contents.filter((content) => content.creativeAssets.length === 0);
+  const createdRevisionIds: string[] = [];
+  for (const content of missing) {
+    const createdId = await prisma.$transaction(async (tx) => {
+      const existing = await tx.creativeAsset.findFirst({ where: { sourceContentId: content.id, isActive: true }, select: { id: true } });
+      if (existing) return null;
+      const metadataJson = JSON.stringify({
+        libraryVersion: VIDEO_EDITING_LIBRARY_VERSION, rightsBasis: "OWNED_META_PAGE",
+        sourceContentId: content.id, importedForVideoEditing: true,
+        safety: { mediaEdited: false, campaignPublished: false, realSpendUsed: false },
+      });
+      const asset = await tx.creativeAsset.create({ data: {
+        pageId: content.pageId, sourceContentId: content.id, sourceAnalysisId: content.analysis?.id ?? null,
+        name: `${content.pageName} | ${content.productCategory} | ${content.id}`,
+        assetType: "VIDEO", sourceMode: "OWNED_META_LIBRARY", productCategory: content.productCategory,
+        mediaType: content.mediaType, originalMediaUrl: content.mediaUrl, originalThumbnailUrl: content.thumbnailUrl,
+        originalMessage: content.message, status: "PLANNING", approvalStatus: "NOT_SUBMITTED",
+        optimizationReason: "นำวิดีโอของเพจที่วิเคราะห์เสร็จแล้วเข้าสู่ Video Editing Library",
+        metadataJson, currentVersion: 1,
+      } });
+      const revision = await tx.creativeRevision.create({ data: {
+        creativeAssetId: asset.id, version: 1, revisionType: "VIDEO_EDIT", status: "PLANNING",
+        providerName: "OWNED_META_LIBRARY", providerModel: VIDEO_EDITING_LIBRARY_VERSION,
+        aiReason: "วิดีโอต้นฉบับจากเพจที่เป็นเจ้าของ พร้อมสร้างแผนตัดต่อ",
+        primaryText: content.message, mediaUrl: content.mediaUrl, thumbnailUrl: content.thumbnailUrl,
+        sourceFingerprint: content.contentFingerprint ?? content.fingerprint, metadataJson, approvalStatus: "NOT_SUBMITTED",
+      } });
+      await tx.decisionLog.create({ data: {
+        contentId: content.id, decisionType: "VIDEO_EDITING_LIBRARY", action: "IMPORT_OWNED_VIDEO_DRAFT_V1",
+        reason: "ซิงก์วิดีโอจาก Owned Meta Page เข้าคลังตัดต่อแบบ Draft", confidence: 100,
+        inputJson: JSON.stringify({ contentId: content.id, pageId: content.pageId, mediaType: content.mediaType }),
+        outputJson: JSON.stringify({ creativeAssetId: asset.id, creativeRevisionId: revision.id }),
+        policyJson: JSON.stringify({ ownerApprovalRequiredBeforeRender: true, mediaEdited: false, campaignPublished: false, realSpendUsed: false }),
+        policyReference: "Master Spec 2, 58, 73",
+      } });
+      return revision.id;
+    });
+    if (createdId) createdRevisionIds.push(createdId);
+  }
+  const pageCounts = new Map<string, { pageId: string; pageName: string; videos: number }>();
+  for (const content of contents) {
+    const current = pageCounts.get(content.pageId);
+    if (current) current.videos += 1;
+    else pageCounts.set(content.pageId, { pageId: content.pageId, pageName: content.pageName, videos: 1 });
+  }
+  return {
+    libraryVersion: VIDEO_EDITING_LIBRARY_VERSION, windowDays: VIDEO_LIBRARY_WINDOW_DAYS,
+    eligibleVideos: contents.length, importedVideos: createdRevisionIds.length, createdRevisionIds,
+    pages: [...pageCounts.values()].sort((a, b) => a.pageName.localeCompare(b.pageName, "th")),
+    safety: { draftOnly: true, mediaEdited: false, campaignPublished: false, realSpendUsed: false, budgetChanged: false },
+  };
+}
+
 export async function listVideoEditingCandidates() {
   const revisions = await prisma.creativeRevision.findMany({
     where: {
@@ -157,7 +229,7 @@ export async function listVideoEditingCandidates() {
       status: { in: ["PLANNING", "DRAFT", "NEED_APPROVAL", "READY_TO_RENDER", "RENDERED"] },
     },
     orderBy: { updatedAt: "desc" },
-    take: 100,
+    take: 500,
     select: {
       id: true,
       version: true,
@@ -168,7 +240,7 @@ export async function listVideoEditingCandidates() {
       durationMs: true,
       aspectRatio: true,
       editInstructions: true,
-      creativeAsset: { select: { name: true, originalMediaUrl: true, originalThumbnailUrl: true, page: { select: { name: true } } } },
+      creativeAsset: { select: { sourceContentId: true, productCategory: true, name: true, originalMediaUrl: true, originalThumbnailUrl: true, page: { select: { id: true, name: true } } } },
     },
   });
 
@@ -177,7 +249,10 @@ export async function listVideoEditingCandidates() {
     version: revision.version,
     revisionType: revision.revisionType,
     status: revision.status,
+    contentId: revision.creativeAsset.sourceContentId,
+    productCategory: revision.creativeAsset.productCategory,
     assetName: revision.creativeAsset.name,
+    pageId: revision.creativeAsset.page.id,
     pageName: revision.creativeAsset.page.name,
     sourceUrl: revision.mediaUrl ?? revision.creativeAsset.originalMediaUrl,
     thumbnailUrl: revision.thumbnailUrl ?? revision.creativeAsset.originalThumbnailUrl,
