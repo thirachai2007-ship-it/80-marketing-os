@@ -502,7 +502,9 @@ export async function syncMetaAdObjects({
       existingIds.map((item) => item.id),
     );
     const persistenceBatchSize =
-      resource === "campaigns" ? 20 : 5;
+      resource === "campaigns" || resource === "ads"
+        ? 20
+        : 5;
 
     for (
       let start = 0;
