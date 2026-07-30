@@ -6,7 +6,9 @@ export const META_MARKETING_API_ADAPTER_VERSION =
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_RETRIES = 3;
 const MAX_RESPONSE_TEXT_LENGTH = 4_000;
-const META_NAME_MAX_BYTES = 255;
+// Keep margin below Graph API's 255-byte validation because the API may
+// normalize or encode non-Latin names before applying its limit.
+const META_NAME_MAX_BYTES = 180;
 
 export type MetaAdapterMode =
   | "READ_ONLY"
