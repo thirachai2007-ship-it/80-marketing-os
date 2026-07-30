@@ -66,10 +66,15 @@ export async function getSpec30Evidence() {
     );
     const sweepIds = [...new Set(accountRuns.map((run) => metadata(run.metadataJson).sweepId).filter((id): id is string => typeof id === "string" && id.length > 0))];
     const completedSweep = sweepIds.map((sweepId) => {
-      const pages = accountRuns
+      const pageAttempts = accountRuns
         .filter((run) => metadata(run.metadataJson).sweepId === sweepId)
         .map((run) => ({ run, meta: metadata(run.metadataJson) }))
-        .filter((item) => typeof item.meta.sweepPage === "number")
+        .filter((item) => typeof item.meta.sweepPage === "number");
+      const pages = [...new Map(
+        pageAttempts
+          .reverse()
+          .map((item) => [Number(item.meta.sweepPage), item]),
+      ).values()]
         .sort((left, right) => Number(left.meta.sweepPage) - Number(right.meta.sweepPage));
       const pageNumbers = pages.map((item) => Number(item.meta.sweepPage));
       const contiguous = pageNumbers.every((page, index) => page === index + 1);
