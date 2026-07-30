@@ -439,7 +439,7 @@ export async function syncMetaAdObjects({
   try {
     const params: Record<string, string> = {
       fields: RESOURCE_FIELDS[resource],
-      limit: "100",
+      limit: resource === "ads" ? "250" : "100",
     };
 
     if (after) {
