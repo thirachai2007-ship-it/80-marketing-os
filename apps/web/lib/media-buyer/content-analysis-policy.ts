@@ -1,4 +1,4 @@
-export const CONTENT_ANALYSIS_RECENCY_DAYS = 45;
+export const CONTENT_ANALYSIS_RECENCY_DAYS = 75;
 
 export function getContentAnalysisCutoff(
   now = new Date(),
