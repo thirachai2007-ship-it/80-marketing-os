@@ -16,9 +16,10 @@ import { runMetaIntegrationHealthMonitor } from "@/lib/meta/integration-health-m
 import { runAudiencePerformanceBatch } from "@/lib/media-buyer/audience-performance-engine";
 import { runAudienceLearningBatch } from "@/lib/media-buyer/audience-learning-engine";
 import { runCreativeRenderingBatch } from "@/lib/media-buyer/creative-renderer";
+import { runAutonomousMetaPreparationBatch } from "@/lib/media-buyer/autonomous-meta-preparer";
 
 export const AUTONOMY_KERNEL_VERSION =
-  "80ai-autonomy-kernel-v1";
+  "80ai-autonomy-kernel-v2-paused-meta";
 
 const KERNEL_RUN_TYPE = "AUTONOMY_KERNEL_V1";
 const BACKFILL_RUN_TYPE =
@@ -438,6 +439,12 @@ export async function runAutonomyKernel() {
       ),
     );
 
+    steps.push(
+      await runStep("AUTONOMOUS_META_PAUSED_PREPARATION", () =>
+        runAutonomousMetaPreparationBatch({ batchSize: 2 }),
+      ),
+    );
+
     const failedSteps = steps.filter(
       (step) => step.status === "FAILED",
     ).length;
@@ -445,7 +452,8 @@ export async function runAutonomyKernel() {
     const status =
       failedSteps === 0 ? "COMPLETED" : "PARTIAL";
     const safety = {
-      ownerApprovalRequired: true,
+      intermediateOwnerApprovalRequired: false,
+      ownerActivationRequired: true,
       metaMutationExecuted: false,
       campaignPublished: false,
       realSpendUsed: false,
