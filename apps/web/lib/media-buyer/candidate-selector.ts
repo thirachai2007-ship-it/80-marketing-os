@@ -3,6 +3,7 @@ import {
   isEligibleCampaignCandidate,
   type CampaignPriorityBreakdown,
 } from "@/lib/media-buyer/campaign-priority";
+import { calibrateAiScore } from "@/lib/media-buyer/score-calibration";
 
 import prisma from "@/lib/prisma";
 import { getContentAnalysisCutoff } from "@/lib/media-buyer/content-analysis-policy";
@@ -531,11 +532,13 @@ function validateCandidatePolicy(input: {
     return `CreativeAsset approvalStatus=${creativeApprovalStatus} ไม่อนุญาตให้ใช้`;
   }
 
-  if (
-    candidate.analysis.totalScore <
-    minimumScore
-  ) {
-    return `AI Score ${candidate.analysis.totalScore} ต่ำกว่าเกณฑ์ ${minimumScore}`;
+  const calibratedScore = calibrateAiScore(
+    candidate.analysis.totalScore,
+    candidate.analysis.recommendation,
+  ).score;
+
+  if (calibratedScore < minimumScore) {
+    return `คะแนนปรับเทียบ ${calibratedScore} (AI ดิบ ${candidate.analysis.totalScore}) ต่ำกว่าเกณฑ์ ${minimumScore}`;
   }
 
   if (
@@ -649,8 +652,14 @@ function compareCandidates(
   }
 
   const totalDifference =
-    second.analysis.totalScore -
-    first.analysis.totalScore;
+    calibrateAiScore(
+      second.analysis.totalScore,
+      second.analysis.recommendation,
+    ).score -
+    calibrateAiScore(
+      first.analysis.totalScore,
+      first.analysis.recommendation,
+    ).score;
 
   if (totalDifference !== 0) {
     return totalDifference;
