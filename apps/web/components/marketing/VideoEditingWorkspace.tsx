@@ -1,7 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Film, RefreshCw, ShieldCheck } from "lucide-react";
+import { Check, Film, RefreshCw, ShieldCheck, Volume2 } from "lucide-react";
+
+/* Meta thumbnail hosts are signed and vary per page. */
+/* eslint-disable @next/next/no-img-element */
 
 type Candidate = { id: string; contentId: string | null; productCategory: string; assetName: string; pageId: string; pageName: string; version: number; status: string; sourceUrl: string | null; thumbnailUrl: string | null; durationMs: number | null; aspectRatio: string | null; hasEditPlan: boolean };
 type EditPlan = { placement: string; aspectRatio: string; durationMs: number; timeline: { fromMs: number; toMs: number; operation: string; overlayText: string | null }[]; audio: { normalizeLufs: number }; captions: { enabled: boolean; language: string } };
@@ -49,13 +52,25 @@ export default function VideoEditingWorkspace() {
     </section>
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="mb-4 flex items-center justify-between"><div><h2 className="font-bold text-slate-900">สร้างแผนตัดต่อ</h2><p className="mt-1 text-sm text-slate-500">วิดีโอของทุกเพจที่วิเคราะห์เสร็จแล้วในช่วง 75 วัน · {new Set(candidates.map((candidate) => candidate.pageId)).size} เพจ · {candidates.length} วิดีโอ</p></div><button onClick={() => void load()} className="rounded-xl border border-slate-200 p-2" aria-label="โหลดคลังวิดีโอใหม่"><RefreshCw size={17} /></button></div>
+      <div className="mb-6">
+        <div className="mb-3 flex items-center justify-between"><div><h3 className="font-semibold text-slate-900">เลือกวิดีโอจากอัลบั้ม Reels</h3><p className="text-sm text-slate-500">กดที่ภาพวิดีโอเพื่อเลือก รายการที่เลือกจะมีกรอบสีฟ้าและเครื่องหมายถูก</p></div></div>
+        <div className="grid max-h-[72vh] grid-cols-2 gap-3 overflow-y-auto pr-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+          {candidates.map((candidate) => {
+            const isSelected = candidate.id === creativeRevisionId;
+            return <button key={candidate.id} type="button" aria-pressed={isSelected} aria-label={`เลือกวิดีโอ ${candidate.pageName} ${candidate.productCategory}`} onClick={() => { setCreativeRevisionId(candidate.id); setPlan(null); }} className={`group relative overflow-hidden rounded-2xl border-4 text-left shadow-sm transition focus:outline-none focus:ring-4 focus:ring-cyan-200 ${isSelected ? "border-cyan-500 shadow-cyan-200" : "border-transparent hover:border-cyan-200"}`}>
+              <div className="aspect-[9/16] bg-slate-900">{candidate.thumbnailUrl ? <img loading="lazy" src={candidate.thumbnailUrl} alt="" className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-slate-400"><Film size={34} /></div>}</div>
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/75 to-transparent p-3 pt-10 text-white"><p className="line-clamp-2 text-xs font-semibold">{candidate.pageName}</p><p className="mt-1 text-[11px] text-cyan-200">{candidate.productCategory}</p>{candidate.hasEditPlan && <span className="mt-1 inline-block rounded-full bg-violet-500/90 px-2 py-0.5 text-[10px]">มีแผนแล้ว</span>}</div>
+              {isSelected && <span className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-cyan-500 text-white shadow-lg"><Check size={20} strokeWidth={3} /></span>}
+            </button>;
+          })}
+        </div>
+      </div>
+      {selected?.sourceUrl && <div className="mb-6 rounded-3xl bg-slate-950 p-4 text-white"><div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div><p className="font-semibold">{selected.pageName}</p><p className="text-sm text-slate-400">{selected.productCategory} · {selected.contentId}</p></div><p className="flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-sm"><Volume2 size={17} />เปิดเสียงได้จากปุ่มลำโพงใน Player</p></div><video key={selected.id} className="mx-auto aspect-[9/16] max-h-[72vh] w-auto max-w-full rounded-2xl bg-black object-contain" controls playsInline preload="metadata" poster={selected.thumbnailUrl ?? undefined} src={selected.sourceUrl} /></div>}
       <div className="grid gap-4 md:grid-cols-2">
-        <label className="text-sm font-medium text-slate-700 md:col-span-2">Video Revision<select value={creativeRevisionId} onChange={(event) => { setCreativeRevisionId(event.target.value); setPlan(null); }} className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2"><option value="">เลือกวิดีโอ</option>{candidates.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.pageName} — {candidate.productCategory} — {candidate.contentId ?? candidate.assetName} v{candidate.version}{candidate.hasEditPlan ? " (มีแผนแล้ว)" : ""}</option>)}</select></label>
         <label className="text-sm font-medium text-slate-700">Placement<select value={placement} onChange={(event) => setPlacement(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2"><option value="REELS">Reels 9:16</option><option value="STORIES">Stories 9:16</option><option value="FEED">Feed 4:5</option><option value="IN_STREAM">In-stream 16:9</option></select></label>
         <label className="text-sm font-medium text-slate-700">ความยาวเป้าหมาย (วินาที)<input type="number" min={6} max={60} value={durationSeconds} onChange={(event) => setDurationSeconds(Number(event.target.value))} className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
         <label className="text-sm font-medium text-slate-700 md:col-span-2">Hook 3 วินาทีแรก<input value={hookText} maxLength={120} onChange={(event) => setHookText(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2" placeholder="ข้อความสำคัญที่ต้องเห็นทันที" /></label>
       </div>
-      {selected?.sourceUrl && <video className="mt-4 max-h-72 w-full rounded-2xl bg-black object-contain" controls poster={selected.thumbnailUrl ?? undefined} src={selected.sourceUrl} />}
       <button disabled={busy || !creativeRevisionId} onClick={() => void createPlan()} className="mt-4 rounded-xl bg-cyan-600 px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">สร้างแผนและส่งรอตรวจ</button>
       {candidates.length === 0 && <p className="mt-3 text-sm text-amber-700">ยังไม่มี Video Revision ที่พร้อมวางแผนตัดต่อ</p>}
       {message && <p className="mt-3 text-sm text-teal-700">{message}</p>}
