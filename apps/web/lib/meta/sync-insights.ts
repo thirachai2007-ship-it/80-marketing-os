@@ -462,11 +462,11 @@ export async function syncMetaInsights({
     for (
       let start = 0;
       start < rows.length;
-      start += 5
+      start += 20
     ) {
       await Promise.all(
         rows
-          .slice(start, start + 5)
+          .slice(start, start + 20)
           .map((row) =>
             saveInsight(
               row,
