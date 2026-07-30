@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Film, RefreshCw, ShieldCheck } from "lucide-react";
 
-type Candidate = { id: string; assetName: string; pageName: string; version: number; status: string; sourceUrl: string | null; thumbnailUrl: string | null; durationMs: number | null; aspectRatio: string | null; hasEditPlan: boolean };
+type Candidate = { id: string; contentId: string | null; productCategory: string; assetName: string; pageId: string; pageName: string; version: number; status: string; sourceUrl: string | null; thumbnailUrl: string | null; durationMs: number | null; aspectRatio: string | null; hasEditPlan: boolean };
 type EditPlan = { placement: string; aspectRatio: string; durationMs: number; timeline: { fromMs: number; toMs: number; operation: string; overlayText: string | null }[]; audio: { normalizeLufs: number }; captions: { enabled: boolean; language: string } };
 
 export default function VideoEditingWorkspace() {
@@ -17,10 +17,12 @@ export default function VideoEditingWorkspace() {
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    const response = await fetch("/api/media-buyer/video-editing-engine", { cache: "no-store" });
+    const response = await fetch("/api/media-buyer/video-editing-engine", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "SYNC_LIBRARY" }) });
     const data = await response.json() as { candidates?: Candidate[]; error?: string };
     if (!response.ok) throw new Error(data.error ?? "โหลดรายการวิดีโอไม่สำเร็จ");
-    setCandidates(data.candidates ?? []);
+    const nextCandidates = data.candidates ?? [];
+    setCandidates(nextCandidates);
+    setCreativeRevisionId((current) => current || nextCandidates[0]?.id || "");
   }, []);
   useEffect(() => {
     // Initial synchronization with the server-side video candidate inventory.
@@ -46,9 +48,9 @@ export default function VideoEditingWorkspace() {
       <div className="mt-5 grid gap-3 sm:grid-cols-3">{[["Workflow", "PLAN & REVIEW"], ["Owner approval", "REQUIRED"], ["Meta mutation", "NONE"]].map(([label, value]) => <div key={label} className="rounded-2xl bg-white/10 p-4"><p className="text-xs text-slate-400">{label}</p><p className="mt-1 font-semibold text-cyan-300">{value}</p></div>)}</div>
     </section>
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="mb-4 flex items-center justify-between"><h2 className="font-bold text-slate-900">สร้างแผนตัดต่อ</h2><button onClick={() => void load()} className="rounded-xl border border-slate-200 p-2" aria-label="โหลดใหม่"><RefreshCw size={17} /></button></div>
+      <div className="mb-4 flex items-center justify-between"><div><h2 className="font-bold text-slate-900">สร้างแผนตัดต่อ</h2><p className="mt-1 text-sm text-slate-500">วิดีโอของทุกเพจที่วิเคราะห์เสร็จแล้วในช่วง 75 วัน · {new Set(candidates.map((candidate) => candidate.pageId)).size} เพจ · {candidates.length} วิดีโอ</p></div><button onClick={() => void load()} className="rounded-xl border border-slate-200 p-2" aria-label="โหลดคลังวิดีโอใหม่"><RefreshCw size={17} /></button></div>
       <div className="grid gap-4 md:grid-cols-2">
-        <label className="text-sm font-medium text-slate-700 md:col-span-2">Video Revision<select value={creativeRevisionId} onChange={(event) => { setCreativeRevisionId(event.target.value); setPlan(null); }} className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2"><option value="">เลือกวิดีโอ</option>{candidates.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.pageName} — {candidate.assetName} v{candidate.version}{candidate.hasEditPlan ? " (มีแผนแล้ว)" : ""}</option>)}</select></label>
+        <label className="text-sm font-medium text-slate-700 md:col-span-2">Video Revision<select value={creativeRevisionId} onChange={(event) => { setCreativeRevisionId(event.target.value); setPlan(null); }} className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2"><option value="">เลือกวิดีโอ</option>{candidates.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.pageName} — {candidate.productCategory} — {candidate.contentId ?? candidate.assetName} v{candidate.version}{candidate.hasEditPlan ? " (มีแผนแล้ว)" : ""}</option>)}</select></label>
         <label className="text-sm font-medium text-slate-700">Placement<select value={placement} onChange={(event) => setPlacement(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2"><option value="REELS">Reels 9:16</option><option value="STORIES">Stories 9:16</option><option value="FEED">Feed 4:5</option><option value="IN_STREAM">In-stream 16:9</option></select></label>
         <label className="text-sm font-medium text-slate-700">ความยาวเป้าหมาย (วินาที)<input type="number" min={6} max={60} value={durationSeconds} onChange={(event) => setDurationSeconds(Number(event.target.value))} className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
         <label className="text-sm font-medium text-slate-700 md:col-span-2">Hook 3 วินาทีแรก<input value={hookText} maxLength={120} onChange={(event) => setHookText(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2" placeholder="ข้อความสำคัญที่ต้องเห็นทันที" /></label>
