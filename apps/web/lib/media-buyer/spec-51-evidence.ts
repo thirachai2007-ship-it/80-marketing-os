@@ -1,10 +1,11 @@
+import { buildCampaignDraft } from "@/lib/media-buyer/campaign-builder";
 import prisma from "@/lib/prisma";
 
 export const SPEC_51_EVIDENCE_VERSION = "spec-51-evidence-v1";
 
 const REQUIRED_STICKER_ONLY_PAGES = [
   { key: "STICKER2DAY", name: "Sticker2Day" },
-  { key: "TTN_VACUUM_STICKER", name: "TTN สติกเกอร์สูญญากาศ" },
+  { key: "TTN_VACUUM_STICKER", name: "TTN สติกเกอร์สูญญากาศ", aliases: ["TTN Sticker"] },
   { key: "RACING_STICKER", name: "สติกเกอร์ซิ่ง" },
 ] as const;
 
@@ -12,8 +13,35 @@ function normalize(value: string) {
   return value.normalize("NFKC").trim().toLocaleLowerCase("th-TH");
 }
 
-function matchesRequiredPage(pageName: string, requiredName: string) {
-  return normalize(pageName).includes(normalize(requiredName));
+function matchesRequiredPage(pageName: string, required: (typeof REQUIRED_STICKER_ONLY_PAGES)[number]) {
+  const names = [required.name, ...("aliases" in required ? required.aliases : [])];
+  return names.some((name) => normalize(pageName).includes(normalize(name)));
+}
+
+export async function repairSpec51ProductionData() {
+  const pages = await prisma.managedPage.findMany({ where: { isActive: true }, select: { id: true, name: true } });
+  const matchedPages = REQUIRED_STICKER_ONLY_PAGES.map((required) => ({ required, matches: pages.filter((page) => matchesRequiredPage(page.name, required)) }));
+  const ambiguous = matchedPages.filter((item) => item.matches.length !== 1);
+  if (ambiguous.length > 0) throw new Error(`STICKER_ONLY_PAGE_MATCH_FAILED:${ambiguous.map((item) => item.required.key).join(",")}`);
+  const pageIds = matchedPages.map((item) => item.matches[0].id);
+  const protectedInvalidDrafts = await prisma.campaignDraft.count({ where: { pageId: { in: pageIds }, productCategory: { not: "STICKER" }, metaCampaignId: { not: null } } });
+  if (protectedInvalidDrafts > 0) throw new Error(`META_CREATED_PROHIBITED_CAMPAIGNS_REQUIRE_OWNER_REVIEW:${protectedInvalidDrafts}`);
+
+  const mutation = await prisma.$transaction(async (tx) => {
+    const deletedDrafts = await tx.campaignDraft.deleteMany({ where: { pageId: { in: pageIds }, productCategory: { not: "STICKER" }, metaCampaignId: null } });
+    const disabledPolicies = await tx.pageProductPolicy.updateMany({ where: { pageId: { in: pageIds }, productCategory: { not: "STICKER" } }, data: { isEnabled: false, allocationPercent: 0 } });
+    for (const pageId of pageIds) {
+      await tx.pageProductPolicy.upsert({
+        where: { pageId_productCategory: { pageId, productCategory: "STICKER" } },
+        create: { pageId, productCategory: "STICKER", allocationPercent: 100, isEnabled: true },
+        update: { allocationPercent: 100, isEnabled: true },
+      });
+    }
+    return { deletedStaleNonMetaDrafts: deletedDrafts.count, disabledNonStickerPolicies: disabledPolicies.count };
+  });
+  const buildResults = [];
+  for (const pageId of pageIds) buildResults.push(await buildCampaignDraft({ pageId, productCategory: "STICKER" }));
+  return { matchedPages: matchedPages.map((item) => ({ pageKey: item.required.key, pageId: item.matches[0].id, pageName: item.matches[0].name })), protectedInvalidDrafts, ...mutation, buildResults };
 }
 
 export async function getSpec51Evidence() {
@@ -55,7 +83,7 @@ export async function getSpec51Evidence() {
 
   const gaps: Array<{ pageKey?: string; pageId?: string; reason: string; count?: number }> = [];
   const evidence = REQUIRED_STICKER_ONLY_PAGES.map((required) => {
-    const matches = pages.filter((page) => matchesRequiredPage(page.name, required.name));
+    const matches = pages.filter((page) => matchesRequiredPage(page.name, required));
     if (matches.length !== 1) {
       gaps.push({ pageKey: required.key, reason: matches.length === 0 ? "REQUIRED_STICKER_ONLY_PAGE_NOT_FOUND" : "REQUIRED_STICKER_ONLY_PAGE_MATCH_NOT_UNIQUE", count: matches.length });
     }
