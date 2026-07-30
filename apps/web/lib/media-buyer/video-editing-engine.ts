@@ -37,11 +37,19 @@ function normalizeIntent(value: unknown): ContentIntent | null {
   return (["SALES", "REVIEW", "EDUCATIONAL", "COMEDY", "BEHIND_THE_SCENES", "BRAND_ENGAGEMENT", "UNKNOWN"] as const).find((item) => item === intent) ?? null;
 }
 
+function analyzedProductCategory(rawAnalysisJson: string | null): string {
+  const category = String(parseObject(rawAnalysisJson).productCategory ?? "").trim().toUpperCase();
+  return ["COTTON_DTF", "DTG", "PRINTED_SHIRT", "APRON", "STICKER"].includes(category) ? category : "UNKNOWN";
+}
+
 export function classifyContentIntent(analysis: IntentEvidence): { contentIntent: ContentIntent; isSalesCandidate: boolean; reason: string } {
   const raw = parseObject(analysis.rawAnalysisJson);
   const explicit = normalizeIntent(raw.contentIntent);
   const evidence = [analysis.summary, analysis.visibleTextJson, analysis.visualObservationsJson, analysis.contextObservationsJson].join(" ").normalize("NFKC").toLowerCase();
-  const inferred: ContentIntent = /ตลก|ขำ|มุก|แกล้ง|pov\s*[:：]?|comedy|humou?r|นอนแค่/.test(evidence)
+  const strongSalesEvidence = analysis.recommendation !== "REJECT" && analysis.salesPotentialScore >= 75;
+  const inferred: ContentIntent = strongSalesEvidence
+    ? "SALES"
+    : /ตลก|ขำ|มุก|แกล้ง|pov\s*[:：]?|comedy|humou?r|นอนแค่/.test(evidence)
     ? "COMEDY"
     : /รีวิว|ลูกค้า|testimonial|review/.test(evidence)
       ? "REVIEW"
@@ -52,9 +60,9 @@ export function classifyContentIntent(analysis: IntentEvidence): { contentIntent
           : analysis.offerClarityScore >= 35 && analysis.salesPotentialScore >= 50
             ? "SALES"
             : "BRAND_ENGAGEMENT";
-  const contentIntent = explicit ?? inferred;
+  const contentIntent = strongSalesEvidence ? "SALES" : explicit ?? inferred;
   const paidAdIntents: ContentIntent[] = ["SALES", "REVIEW", "EDUCATIONAL"];
-  const isSalesCandidate = paidAdIntents.includes(contentIntent) && analysis.recommendation !== "REJECT" && analysis.productVisibilityScore >= 35 && analysis.salesPotentialScore >= 50;
+  const isSalesCandidate = strongSalesEvidence || (paidAdIntents.includes(contentIntent) && analysis.recommendation !== "REJECT" && analysis.productVisibilityScore >= 35 && analysis.salesPotentialScore >= 50);
   const reason = isSalesCandidate ? "มีสินค้าและข้อเสนอขายชัดเจน" : contentIntent === "COMEDY" ? "คลิปตลก/POV ไม่ใช่คลิปขาย" : "ยังไม่มีหลักฐานเพียงพอว่าเป็นคลิปขาย";
   return { contentIntent, isSalesCandidate, reason };
 }
@@ -214,9 +222,19 @@ export async function syncVideoEditingLibrary() {
     },
   });
   let correctedNonSalesClassifications = 0;
+  let restoredSalesClassifications = 0;
   for (const content of contents) {
     if (!content.analysis) continue;
     const intent = classifyContentIntent(content.analysis);
+    const analyzedCategory = analyzedProductCategory(content.analysis.rawAnalysisJson);
+    if (intent.isSalesCandidate && content.productCategory === "UNKNOWN" && analyzedCategory !== "UNKNOWN") {
+      await prisma.$transaction([
+        prisma.pageContent.update({ where: { id: content.id }, data: { productCategory: analyzedCategory, productConfidence: 80, productEvidence: `CONTENT_INTENT_SALES_RESTORE:${analyzedCategory}:${intent.reason}` } }),
+        prisma.creativeAsset.updateMany({ where: { sourceContentId: content.id, isActive: true }, data: { productCategory: analyzedCategory, optimizationReason: intent.reason } }),
+      ]);
+      content.productCategory = analyzedCategory;
+      restoredSalesClassifications += 1;
+    }
     const shouldClearProduct = !intent.isSalesCandidate && ["COMEDY", "BEHIND_THE_SCENES", "BRAND_ENGAGEMENT"].includes(intent.contentIntent) && content.productCategory !== "UNKNOWN";
     if (!shouldClearProduct) continue;
     await prisma.$transaction([
@@ -275,7 +293,7 @@ export async function syncVideoEditingLibrary() {
   }
   return {
     libraryVersion: VIDEO_EDITING_LIBRARY_VERSION, windowDays: VIDEO_LIBRARY_WINDOW_DAYS,
-    libraryVideos: contents.length, importedVideos: createdRevisionIds.length, correctedNonSalesClassifications, createdRevisionIds,
+    libraryVideos: contents.length, importedVideos: createdRevisionIds.length, correctedNonSalesClassifications, restoredSalesClassifications, createdRevisionIds,
     pages: [...pageCounts.values()].sort((a, b) => a.pageName.localeCompare(b.pageName, "th")),
     safety: { draftOnly: true, mediaEdited: false, campaignPublished: false, realSpendUsed: false, budgetChanged: false },
   };
