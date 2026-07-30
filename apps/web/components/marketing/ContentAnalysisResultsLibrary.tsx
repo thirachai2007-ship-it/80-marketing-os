@@ -18,7 +18,6 @@ import {
   RefreshCcw,
   Search,
   ShieldCheck,
-  Sparkles,
   TriangleAlert,
 } from "lucide-react";
 
@@ -46,6 +45,12 @@ type ResultItem = {
     isOldContent: boolean;
   };
   analysis: {
+    calibration: {
+      score: number;
+      rawAiScore: number;
+      grade: "EXCEPTIONAL" | "STRONG_TEST" | "AVERAGE" | "WEAK";
+      evidence: "AI_ONLY";
+    };
     totalScore: number;
     visualScore: number;
     copyScore: number;
@@ -97,6 +102,7 @@ type ResultsResponse = {
     useExistingPost: number;
     createDarkPost: number;
     reject: number;
+    scoreMethod: string;
   };
   pages: PageOption[];
   results: ResultItem[];
@@ -130,6 +136,13 @@ function formatNumber(value: number) {
   return new Intl.NumberFormat(
     "th-TH",
   ).format(value);
+}
+
+function calibrationLabel(grade: ResultItem["analysis"]["calibration"]["grade"]) {
+  if (grade === "EXCEPTIONAL") return "เด่นมาก — ควรตรวจเพื่อทดสอบ";
+  if (grade === "STRONG_TEST") return "น่าทดสอบ";
+  if (grade === "AVERAGE") return "ทั่วไป — ต้องคัดเพิ่ม";
+  return "อ่อน — ไม่แนะนำ";
 }
 
 function recommendationLabel(
@@ -281,6 +294,8 @@ export default function ContentAnalysisResultsLibrary() {
   }, [requestUrl]);
 
   useEffect(() => {
+    // Fetching is the external synchronization performed by this effect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, [load]);
 
@@ -621,10 +636,7 @@ export default function ContentAnalysisResultsLibrary() {
                             )}
                           </span>
                           <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[9px] font-bold text-blue-700">
-                            {
-                              item.analysis
-                                .confidence
-                            }
+                            AI ประเมิน · ยังไม่มีผลแอดจริง
                           </span>
                         </div>
                         <h2 className="mt-3 truncate text-sm font-bold text-slate-900">
@@ -643,13 +655,16 @@ export default function ContentAnalysisResultsLibrary() {
                       <div className="flex items-center gap-3">
                         <div className="text-right">
                           <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-slate-400">
-                            Score
+                            คะแนนปรับเทียบ
                           </p>
                           <p className="text-3xl font-bold text-slate-900">
                             {
                               item.analysis
-                                .totalScore
+                                .calibration.score
                             }
+                          </p>
+                          <p className="mt-1 text-[9px] font-semibold text-slate-500">
+                            {calibrationLabel(item.analysis.calibration.grade)}
                           </p>
                         </div>
                         {item.content
@@ -676,16 +691,22 @@ export default function ContentAnalysisResultsLibrary() {
                       <div
                         className={`h-full rounded-full ${scoreClass(
                           item.analysis
-                            .totalScore,
+                            .calibration.score,
                         )}`}
                         style={{
-                          width: `${item.analysis.totalScore}%`,
+                          width: `${item.analysis.calibration.score}%`,
                         }}
                       />
                     </div>
 
                     <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                       <div className="flex flex-wrap gap-4 text-[10px] text-slate-500">
+                        <span>
+                          AI ดิบ{" "}
+                          <strong className="text-slate-700">
+                            {item.analysis.calibration.rawAiScore}
+                          </strong>
+                        </span>
                         <span>
                           Visual{" "}
                           <strong className="text-slate-700">

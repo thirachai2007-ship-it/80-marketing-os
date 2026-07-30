@@ -7,6 +7,10 @@ import type {
   Prisma,
 } from "@/lib/generated/prisma/client";
 import prisma from "@/lib/prisma";
+import {
+  calibrateAiScore,
+  rawScoreForCalibratedMinimum,
+} from "@/lib/media-buyer/score-calibration";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -112,8 +116,8 @@ export async function GET(
     const where:
       Prisma.ContentAnalysisWhereInput = {
       totalScore: {
-        gte: minScore,
-        lte: maxScore,
+        gte: rawScoreForCalibratedMinimum(minScore),
+        lte: rawScoreForCalibratedMinimum(maxScore),
       },
       ...(recommendation
         ? {
@@ -301,17 +305,16 @@ export async function GET(
       },
       summary: {
         total,
-        averageScore:
-          Math.round(
-            aggregate._avg
-              .totalScore || 0,
-          ),
-        highestScore:
-          aggregate._max
-            .totalScore || 0,
-        lowestScore:
-          aggregate._min
-            .totalScore || 0,
+        averageScore: calibrateAiScore(
+          aggregate._avg.totalScore || 0,
+        ).score,
+        highestScore: calibrateAiScore(
+          aggregate._max.totalScore || 0,
+        ).score,
+        lowestScore: calibrateAiScore(
+          aggregate._min.totalScore || 0,
+        ).score,
+        scoreMethod: "CALIBRATED_AI_V1",
         useExistingPost:
           recommendationCounts
             .USE_EXISTING_POST || 0,
@@ -332,6 +335,10 @@ export async function GET(
               analysis.content.message,
           },
           analysis: {
+            calibration: calibrateAiScore(
+              analysis.totalScore,
+              analysis.recommendation,
+            ),
             totalScore:
               analysis.totalScore,
             visualScore:
