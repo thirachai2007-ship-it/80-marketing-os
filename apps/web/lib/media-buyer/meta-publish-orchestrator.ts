@@ -96,7 +96,7 @@ export type MetaPublishOrchestratorResult = {
     metaAdId: string;
   }>;
 
-  ownerApprovalRequired: false;
+  ownerApprovalRequired: boolean;
   publishAuthorized: true;
 
   executeRequested: boolean;
@@ -422,6 +422,9 @@ export async function orchestrateMetaPublish(
         options.campaignDraftId,
 
       ...base,
+
+      ownerApprovalRequired:
+        true,
 
       metaMutationExecuted:
         false,
