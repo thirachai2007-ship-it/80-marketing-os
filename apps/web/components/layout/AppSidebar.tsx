@@ -15,6 +15,7 @@ import {
   Film,
   ListChecks,
   ChartNoAxesCombined,
+  ScrollText,
 } from "lucide-react";
 
 type MenuItem = {
@@ -46,6 +47,11 @@ const menuGroups: MenuGroup[] = [
   {
     title: "OPERATIONS",
     items: [
+      {
+        title: "Decision Audit",
+        href: "/marketing/decision-audit",
+        icon: ScrollText,
+      },
       {
         title: "Daily Overview",
         href: "/marketing/daily-overview",
