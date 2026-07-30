@@ -6,7 +6,7 @@ import { Check, Film, RefreshCw, ShieldCheck, Volume2, X } from "lucide-react";
 /* Meta thumbnail hosts are signed and vary per page. */
 /* eslint-disable @next/next/no-img-element */
 
-type Candidate = { id: string; contentId: string | null; productCategory: string; assetName: string; pageId: string; pageName: string; version: number; status: string; sourceUrl: string | null; facebookEmbedUrl: string | null; thumbnailUrl: string | null; durationMs: number | null; aspectRatio: string | null; hasEditPlan: boolean };
+type Candidate = { id: string; contentId: string | null; productCategory: string; displayProductCategory: string; contentIntent: string; isSalesCandidate: boolean; salesEligibilityReason: string; assetName: string; pageId: string; pageName: string; version: number; status: string; sourceUrl: string | null; facebookEmbedUrl: string | null; thumbnailUrl: string | null; durationMs: number | null; aspectRatio: string | null; hasEditPlan: boolean };
 type EditPlan = { placement: string; aspectRatio: string; durationMs: number; timeline: { fromMs: number; toMs: number; operation: string; overlayText: string | null }[]; audio: { normalizeLufs: number }; captions: { enabled: boolean; language: string } };
 
 export default function VideoEditingWorkspace() {
@@ -68,19 +68,19 @@ export default function VideoEditingWorkspace() {
             const isSelected = candidate.id === creativeRevisionId;
             return <button key={candidate.id} type="button" aria-pressed={isSelected} aria-label={`เปิดวิดีโอ ${candidate.pageName} ${candidate.productCategory}`} onClick={() => { setCreativeRevisionId(candidate.id); setPlan(null); setMessage(""); setPlayerOpen(true); }} className={`group relative overflow-hidden rounded-2xl border-4 text-left shadow-sm transition focus:outline-none focus:ring-4 focus:ring-cyan-200 ${isSelected ? "border-cyan-500 shadow-cyan-200" : "border-transparent hover:border-cyan-200"}`}>
               <div className="aspect-[9/16] bg-slate-900">{candidate.thumbnailUrl ? <img loading="lazy" src={candidate.thumbnailUrl} alt="" className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-slate-400"><Film size={34} /></div>}</div>
-              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/75 to-transparent p-3 pt-10 text-white"><p className="line-clamp-2 text-xs font-semibold">{candidate.pageName}</p><p className="mt-1 text-[11px] text-cyan-200">{candidate.productCategory}</p>{candidate.hasEditPlan && <span className="mt-1 inline-block rounded-full bg-violet-500/90 px-2 py-0.5 text-[10px]">มีแผนแล้ว</span>}</div>
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/75 to-transparent p-3 pt-10 text-white"><p className="line-clamp-2 text-xs font-semibold">{candidate.pageName}</p><p className={`mt-1 text-[11px] ${candidate.isSalesCandidate ? "text-cyan-200" : "text-amber-200"}`}>{candidate.displayProductCategory} · {candidate.contentIntent}</p>{candidate.hasEditPlan && <span className="mt-1 inline-block rounded-full bg-violet-500/90 px-2 py-0.5 text-[10px]">มีแผนแล้ว</span>}</div>
               {isSelected && <span className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-cyan-500 text-white shadow-lg"><Check size={20} strokeWidth={3} /></span>}
             </button>;
           })}
         </div>
       </div>
-      {selected && <p className="mb-4 flex items-center gap-2 rounded-xl bg-cyan-50 px-4 py-3 text-sm font-medium text-cyan-900"><Volume2 size={18} />คลิปที่เลือก: {selected.pageName} · กดภาพเดิมอีกครั้งเพื่อเปิด Player</p>}
+      {selected && <p className={`mb-4 flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-medium ${selected.isSalesCandidate ? "bg-cyan-50 text-cyan-900" : "bg-amber-50 text-amber-900"}`}><Volume2 size={18} />{selected.isSalesCandidate ? `คลิปขายที่เลือก: ${selected.pageName}` : `${selected.salesEligibilityReason} — เปิดดูได้ แต่ระบบจะไม่ส่งเข้าคิวโฆษณา`}</p>}
       <div className="grid gap-4 md:grid-cols-2">
         <label className="text-sm font-medium text-slate-700">Placement<select value={placement} onChange={(event) => setPlacement(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2"><option value="REELS">Reels 9:16</option><option value="STORIES">Stories 9:16</option><option value="FEED">Feed 4:5</option><option value="IN_STREAM">In-stream 16:9</option></select></label>
         <label className="text-sm font-medium text-slate-700">ความยาวเป้าหมาย (วินาที)<input type="number" min={6} max={60} value={durationSeconds} onChange={(event) => setDurationSeconds(Number(event.target.value))} className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
         <label className="text-sm font-medium text-slate-700 md:col-span-2">Hook 3 วินาทีแรก<input value={hookText} maxLength={120} onChange={(event) => setHookText(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2" placeholder="ข้อความสำคัญที่ต้องเห็นทันที" /></label>
       </div>
-      <button disabled={busy || !creativeRevisionId} onClick={() => void createPlan()} className="mt-4 rounded-xl bg-cyan-600 px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">สร้างแผนและส่งรอตรวจ</button>
+      <button disabled={busy || !creativeRevisionId || !selected?.isSalesCandidate} onClick={() => void createPlan()} className="mt-4 rounded-xl bg-cyan-600 px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">สร้างแผนและส่งรอตรวจ</button>
       {candidates.length === 0 && <p className="mt-3 text-sm text-amber-700">ยังไม่มี Video Revision ที่พร้อมวางแผนตัดต่อ</p>}
       {message && <p className="mt-3 text-sm text-teal-700">{message}</p>}
       {playerOpen && selected && <div role="dialog" aria-modal="true" aria-label={`Player ${selected.pageName}`} onClick={(event) => { if (event.target === event.currentTarget) setPlayerOpen(false); }} className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-3 backdrop-blur-sm sm:p-6">
