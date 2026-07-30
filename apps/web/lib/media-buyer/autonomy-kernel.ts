@@ -9,6 +9,7 @@ import { runCampaignBuilderBatch } from "@/lib/media-buyer/campaign-builder";
 import { runPublishingQueueBatch } from "@/lib/media-buyer/publishing-queue";
 import { runCampaignRenewalPreparation } from "@/lib/media-buyer/campaign-renewal-preparer";
 import { recordDailyOverviewReport } from "@/lib/media-buyer/daily-overview-report";
+import { runContinuousOutcomeLearning } from "@/lib/media-buyer/continuous-learning-loop";
 
 export const AUTONOMY_KERNEL_VERSION =
   "80ai-autonomy-kernel-v1";
@@ -354,6 +355,12 @@ export async function runAutonomyKernel() {
     steps.push(
       await runStep("META_AD_TRACKING", () =>
         runAutomaticAdTracking(),
+      ),
+    );
+
+    steps.push(
+      await runStep("CONTINUOUS_OUTCOME_LEARNING", () =>
+        runContinuousOutcomeLearning(),
       ),
     );
 
