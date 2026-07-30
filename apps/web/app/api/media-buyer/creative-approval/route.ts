@@ -66,6 +66,7 @@ export async function GET(request: NextRequest) {
       creativeAsset: {
         select: {
           name: true,
+          sourceContentId: true,
           productCategory: true,
           mediaType: true,
           originalMediaUrl: true,
@@ -107,6 +108,8 @@ export async function GET(request: NextRequest) {
       description: revision.description,
       callToAction: revision.callToAction,
       assetName: revision.creativeAsset.name,
+      sourceContentId: revision.creativeAsset.sourceContentId,
+      originalPreviewUrl: revision.creativeAsset.originalMediaUrl,
       pageName: revision.creativeAsset.page.name,
       productCategory: revision.creativeAsset.productCategory,
       fingerprint: fingerprint(revision),
