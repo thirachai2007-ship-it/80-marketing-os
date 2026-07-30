@@ -13,6 +13,8 @@ import { runContinuousOutcomeLearning } from "@/lib/media-buyer/continuous-learn
 import { recordDailyCompanyPortfolioOptimization } from "@/lib/media-buyer/company-portfolio-optimizer";
 import { recordDailyPerformanceProofBenchmark } from "@/lib/media-buyer/performance-proof-benchmark";
 import { runMetaIntegrationHealthMonitor } from "@/lib/meta/integration-health-monitor";
+import { runAudiencePerformanceBatch } from "@/lib/media-buyer/audience-performance-engine";
+import { runAudienceLearningBatch } from "@/lib/media-buyer/audience-learning-engine";
 
 export const AUTONOMY_KERNEL_VERSION =
   "80ai-autonomy-kernel-v1";
@@ -368,6 +370,9 @@ export async function runAutonomyKernel() {
         runContinuousOutcomeLearning(),
       ),
     );
+
+    steps.push(await runStep("AUDIENCE_PERFORMANCE", () => runAudiencePerformanceBatch({ batchSize: 50 })));
+    steps.push(await runStep("AUDIENCE_LEARNING", () => runAudienceLearningBatch({ batchSize: 50 })));
 
     steps.push(
       await runStep("COMPANY_PORTFOLIO_OPTIMIZATION", () =>
