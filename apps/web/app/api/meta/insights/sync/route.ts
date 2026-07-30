@@ -30,6 +30,8 @@ export async function POST(
       request.nextUrl.searchParams
         .get("after")
         ?.trim();
+    const sweepId = request.nextUrl.searchParams.get("sweepId")?.trim();
+    const parsedSweepPage = Number(request.nextUrl.searchParams.get("sweepPage"));
 
     if (!adAccountId) {
       return NextResponse.json(
@@ -48,6 +50,11 @@ export async function POST(
         adAccountId,
         datePreset,
         after: after || undefined,
+        sweepId: sweepId || undefined,
+        sweepPage:
+          Number.isInteger(parsedSweepPage) && parsedSweepPage > 0
+            ? parsedSweepPage
+            : undefined,
       }),
     );
   } catch (error) {
