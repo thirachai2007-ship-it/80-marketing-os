@@ -1051,17 +1051,22 @@ export async function renderCreativeRevision(
     revision.approvalStatus !==
     "APPROVED"
   ) {
-    await prisma.creativeRevision.update({
-      where: {
-        id:
-          revision.id,
-      },
+    if (
+      revision.status !==
+      "NEED_APPROVAL"
+    ) {
+      await prisma.creativeRevision.update({
+        where: {
+          id:
+            revision.id,
+        },
 
-      data: {
-        status:
-          "NEED_APPROVAL",
-      },
-    });
+        data: {
+          status:
+            "NEED_APPROVAL",
+        },
+      });
+    }
 
     return {
       ...common,
