@@ -288,6 +288,8 @@ async function writeBuilderDecisionLog(input: {
         campaignPublished: false,
         ownerApprovalRequired: true,
         preventDuplicateAudience: true,
+        netProfitFirst: true,
+        ctrCpmDiagnosticOnly: true,
       }),
       policyReference: "Master Spec 41-46, 53-55, 66-72",
     },
