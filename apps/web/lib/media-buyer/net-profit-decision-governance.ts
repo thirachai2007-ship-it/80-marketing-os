@@ -1,6 +1,6 @@
 import prisma from "@/lib/prisma";
 
-export const NET_PROFIT_GOVERNANCE_VERSION = "net-profit-decision-governance-v1";
+export const NET_PROFIT_GOVERNANCE_VERSION = "net-profit-decision-governance-v2";
 
 const GOVERNED_DECISION_TYPES = new Set([
   "CONTENT_ANALYSIS_WORKER",
@@ -16,6 +16,7 @@ const GOVERNED_DECISION_TYPES = new Set([
   "CAMPAIGN_BUILDING",
   "EXPERIMENT_LIFECYCLE",
   "BUDGET_PLANNING",
+  "CREATIVE_ASSET_BUILDING",
   "CREATIVE_REVISION_GENERATION",
   "CREATIVE_OPTIMIZATION_V3",
   "CONTINUOUS_OUTCOME_LEARNING",

@@ -1,5 +1,5 @@
 import { getNetProfitDecisionGovernance, NET_PROFIT_GOVERNANCE_VERSION } from "@/lib/media-buyer/net-profit-decision-governance";
-export const SPEC_42_EVIDENCE_VERSION = "spec-42-evidence-v1";
+export const SPEC_42_EVIDENCE_VERSION = "spec-42-evidence-v2";
 export async function getSpec42Evidence() {
   const governance = await getNetProfitDecisionGovernance();
   const gaps: Array<{ reason: string; count?: number }> = [];
