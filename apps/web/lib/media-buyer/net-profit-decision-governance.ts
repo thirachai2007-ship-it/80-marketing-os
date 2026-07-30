@@ -1,6 +1,12 @@
 import prisma from "@/lib/prisma";
 
-export const NET_PROFIT_GOVERNANCE_VERSION = "net-profit-decision-governance-v2";
+export const NET_PROFIT_GOVERNANCE_VERSION = "net-profit-decision-governance-v3";
+
+// Master Spec 42 governs AI decisions. Explicit Owner approvals are human
+// decisions and must not be misreported as ungoverned AI activity.
+const NON_AI_DECISION_TYPES = new Set([
+  "CREATIVE_APPROVAL",
+]);
 
 const GOVERNED_DECISION_TYPES = new Set([
   "CONTENT_ANALYSIS_WORKER",
@@ -38,7 +44,9 @@ export async function getNetProfitDecisionGovernance() {
     prisma.decisionLog.findMany({ select: { id: true, decisionType: true, action: true, reason: true, policyJson: true } }),
     prisma.metaAdInsight.aggregate({ where: { dateStart: { gte: cutoff } }, _count: { id: true }, _sum: { spendSatang: true, revenueSatang: true } }),
   ]);
-  const evaluations = decisions.map((decision) => {
+  const evaluations = decisions.filter(
+    (decision) => !NON_AI_DECISION_TYPES.has(decision.decisionType),
+  ).map((decision) => {
     const policy = parsePolicy(decision.policyJson);
     const governed = GOVERNED_DECISION_TYPES.has(decision.decisionType);
     const searchable = `${decision.action} ${decision.reason}`.toLowerCase();
