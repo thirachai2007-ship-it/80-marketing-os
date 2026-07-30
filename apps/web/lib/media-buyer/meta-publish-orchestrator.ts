@@ -35,6 +35,7 @@ type MetaPublishPayload = {
     dailyBudgetSatang: number;
     billingEvent: string;
     optimizationGoal: string;
+    destinationType: string | null;
     bidStrategy: string;
     bidAmountSatang: number | null;
     startTime: string | null;
@@ -1372,6 +1373,10 @@ export async function orchestrateMetaPublish(
       optimizationGoal:
         payload.adSet
           .optimizationGoal,
+
+      destinationType:
+        payload.adSet
+          .destinationType,
 
       targeting:
         options.targeting,
