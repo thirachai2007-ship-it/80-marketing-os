@@ -15,7 +15,6 @@ function parseSourceCampaignId(inputJson: string | null) {
     return null;
   }
 }
-
 export async function runCampaignRenewalPreparation() {
   const startedAt = new Date();
   const cutoff = new Date(startedAt.getTime() + CAMPAIGN_RENEWAL_LEAD_DAYS * 86_400_000);
@@ -115,4 +114,3 @@ export async function runCampaignRenewalPreparation() {
     throw error;
   }
 }
-

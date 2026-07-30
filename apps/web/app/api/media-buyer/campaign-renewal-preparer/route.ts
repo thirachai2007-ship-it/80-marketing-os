@@ -8,4 +8,3 @@ export async function POST() {
   try { return NextResponse.json({ ok: true, ...(await runCampaignRenewalPreparation()) }); }
   catch (error) { return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Unknown renewal preparation error" }, { status: 500 }); }
 }
-

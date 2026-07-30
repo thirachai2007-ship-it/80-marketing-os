@@ -34,4 +34,3 @@ export async function getSpec37Evidence() {
     safety: { ownerApprovalRequired: true, campaignPublished: false, metaMutationExecuted: false, realSpendUsed: false, budgetChanged: false },
   };
 }
-
