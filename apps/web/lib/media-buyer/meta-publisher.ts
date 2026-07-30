@@ -18,6 +18,7 @@ export type MetaPublisherOptions = {
   campaignObjectiveOverride?: string;
   optimizationGoalOverride?: string;
   destinationTypeOverride?: string;
+  callToActionOverride?: string;
 };
 
 export type MetaCampaignPayload = {
@@ -733,6 +734,7 @@ export async function buildMetaPublishPayload(
         ad.description,
 
       callToAction:
+        options.callToActionOverride ??
         ad.callToAction,
 
       mediaUrl,

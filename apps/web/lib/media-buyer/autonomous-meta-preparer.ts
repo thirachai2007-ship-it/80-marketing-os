@@ -51,6 +51,7 @@ export async function prepareCampaignInMetaPaused(
     campaignObjectiveOverride: "OUTCOME_ENGAGEMENT",
     optimizationGoalOverride: "CONVERSATIONS",
     destinationTypeOverride: "MESSENGER",
+    callToActionOverride: "MESSAGE_PAGE",
   });
 
   if (
@@ -128,10 +129,9 @@ export async function prepareCampaignInMetaPaused(
 
   const sourcePost = draft?.ads[0]?.content;
   const destinationUrl =
-    sourcePost?.permalinkUrl ??
-    (draft?.pageId
-      ? `https://www.facebook.com/${draft.pageId}`
-      : null);
+    draft?.pageId
+      ? `https://m.me/${draft.pageId}`
+      : null;
 
   if (!draft || !destinationUrl) {
     return {
@@ -160,6 +160,7 @@ export async function prepareCampaignInMetaPaused(
     destinationUrl,
     targeting,
     promotedObject: { page_id: draft.pageId },
+    reuseExistingPost: false,
     ownerName: "80AI Autonomous Media Buyer",
     note:
       sourcePost?.objectStoryId

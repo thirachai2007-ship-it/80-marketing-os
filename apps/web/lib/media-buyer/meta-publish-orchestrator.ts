@@ -70,6 +70,7 @@ export type MetaPublishOrchestratorOptions = {
 
   targeting: Record<string, unknown>;
   promotedObject?: Record<string, unknown>;
+  reuseExistingPost?: boolean;
 
   ownerName?: string;
   note?: string;
@@ -1437,13 +1438,15 @@ export async function orchestrateMetaPublish(
               null,
 
             objectStoryId:
-              draft.ads.find(
-                (draftAd) =>
-                  draftAd.id ===
-                  ad.campaignDraftAdId,
-              )?.content
-                ?.objectStoryId ??
-              null,
+              options.reuseExistingPost === false
+                ? null
+                : draft.ads.find(
+                    (draftAd) =>
+                      draftAd.id ===
+                      ad.campaignDraftAdId,
+                  )?.content
+                    ?.objectStoryId ??
+                  null,
           },
 
           ad: {
