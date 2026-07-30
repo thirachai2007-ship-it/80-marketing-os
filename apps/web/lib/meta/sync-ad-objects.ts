@@ -42,7 +42,7 @@ type MetaAdSetItem = {
   billing_event?: string;
   optimization_goal?: string;
   bid_strategy?: string;
-  bid_amount?: string;
+  bid_amount?: string | number;
   targeting?: unknown;
   promoted_object?: unknown;
   start_time?: string;
@@ -267,7 +267,9 @@ async function saveAdSet(
       item.optimization_goal || null,
     bidStrategy: item.bid_strategy || null,
     bidAmountMinorUnits:
-      item.bid_amount || null,
+      item.bid_amount == null
+        ? null
+        : String(item.bid_amount),
     targetingJson: json(item.targeting, "{}"),
     promotedObjectJson: json(
       item.promoted_object,
