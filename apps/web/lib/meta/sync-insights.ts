@@ -294,6 +294,8 @@ export async function syncMetaInsights({
   after,
   metaConnectionId,
   trigger = "MANUAL",
+  sweepId,
+  sweepPage,
 }: {
   adAccountId: string;
   datePreset?: string;
@@ -301,6 +303,8 @@ export async function syncMetaInsights({
   after?: string;
   metaConnectionId?: string;
   trigger?: string;
+  sweepId?: string;
+  sweepPage?: number;
 }) {
   if (
     Boolean(datePreset) ===
@@ -364,6 +368,8 @@ export async function syncMetaInsights({
         datePreset: datePreset || null,
         dateRange: dateRange || null,
         level: "ad",
+        sweepId: sweepId || null,
+        sweepPage: sweepPage || null,
       }),
     },
   });
@@ -510,6 +516,8 @@ export async function syncMetaInsights({
           capturesActionValues: true,
           hasNext,
           spendSatang,
+          sweepId: sweepId || null,
+          sweepPage: sweepPage || null,
         }),
       },
     });
