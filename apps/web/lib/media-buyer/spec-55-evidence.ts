@@ -1,7 +1,7 @@
 import prisma from "@/lib/prisma";
 import { EXPERIMENT_LIFECYCLE_VERSION, getExperimentOptions } from "@/lib/media-buyer/experiment-lifecycle";
 
-export const SPEC_55_EVIDENCE_VERSION = "spec-55-evidence-v1";
+export const SPEC_55_EVIDENCE_VERSION = "spec-55-evidence-v2";
 
 export async function getSpec55Evidence() {
   const [drafts, decisions, experimentLogs, performanceDecisions, learningDecisions, pendingAudiences, experimentOptions] = await Promise.all([
@@ -28,7 +28,13 @@ export async function getSpec55Evidence() {
     if (draft.timezone !== "Asia/Bangkok" || draft.scheduleStart !== "08:45" || draft.scheduleEnd !== "18:00" || draft.activeDaysJson !== "[1,2,3,4,5,6]") gaps.push({ campaignDraftId: draft.id, reason: "AUDIENCE_CAMPAIGN_SCHEDULE_INVALID" });
     for (const type of ["CAMPAIGN_BUILDING", "BUDGET_PLANNING", "BID_STRATEGY_PLANNING", "PLACEMENT_PLANNING"] as const) if (!decisionSet.has(`${draft.id}:${type}`)) gaps.push({ campaignDraftId: draft.id, reason: `MISSING_${type}` });
   }
-  const experimentReady = latestExperiments.size > 0 || (experimentOptions.campaignDrafts.length > 0 && experimentOptions.creativeRevisions.length >= 2);
+  const revisionCountsByPage = experimentOptions.creativeRevisions.reduce<Map<string, number>>((counts, revision) => {
+    counts.set(revision.pageId, (counts.get(revision.pageId) ?? 0) + 1);
+    return counts;
+  }, new Map());
+  const experimentReady = latestExperiments.size > 0 || experimentOptions.campaignDrafts.some(
+    (draft) => (revisionCountsByPage.get(draft.pageId) ?? 0) >= 2,
+  );
   if (!experimentReady) gaps.push({ reason: "NO_AB_OR_DYNAMIC_EXPERIMENT_READINESS" });
   if ([...latestExperiments.values()].some((item) => !["PAUSED", "READY_FOR_ACTIVATION", "CANCELLED"].includes(item.status))) gaps.push({ reason: "EXPERIMENT_UNSAFE_STATUS" });
   if (performanceDecisions === 0 || learningDecisions === 0) gaps.push({ reason: "NO_CONTINUOUS_REAL_OUTCOME_ADAPTATION" });
