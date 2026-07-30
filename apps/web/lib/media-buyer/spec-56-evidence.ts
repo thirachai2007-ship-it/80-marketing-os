@@ -36,6 +36,7 @@ export async function getSpec56Evidence() {
         providerName: "OPENAI",
         mediaUrl: { not: null },
         outputFingerprint: { not: null },
+        metadataJson: { contains: "\"visualProductValidated\":true" },
         creativeAsset: { isActive: true },
       },
       orderBy: { createdAt: "desc" },
