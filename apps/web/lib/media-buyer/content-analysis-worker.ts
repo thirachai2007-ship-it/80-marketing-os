@@ -2995,6 +2995,12 @@ async function processQueueItem(input: {
 
                 ownerApprovalRequired:
                   true,
+
+                netProfitFirst:
+                  true,
+
+                ctrCpmDiagnosticOnly:
+                  true,
               }),
 
             policyReference:
