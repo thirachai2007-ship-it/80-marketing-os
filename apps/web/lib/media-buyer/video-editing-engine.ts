@@ -42,7 +42,8 @@ export async function planVideoEdit(input: VideoEditPlanInput) {
   });
 
   if (!revision) throw new Error("ไม่พบ Creative Revision");
-  if (revision.revisionType !== "VIDEO_EDIT" && revision.creativeAsset.assetType !== "VIDEO") {
+  const sourceIsVideo = revision.creativeAsset.mediaType.toUpperCase().includes("VIDEO");
+  if (revision.revisionType !== "VIDEO_EDIT" && revision.creativeAsset.assetType !== "VIDEO" && !sourceIsVideo) {
     throw new Error("Video Editing Engine รองรับเฉพาะ Video Asset");
   }
 
@@ -152,7 +153,7 @@ export async function renderApprovedVideoEdit(creativeRevisionId: string) {
 export async function listVideoEditingCandidates() {
   const revisions = await prisma.creativeRevision.findMany({
     where: {
-      creativeAsset: { assetType: "VIDEO", isActive: true },
+      creativeAsset: { isActive: true, OR: [{ assetType: "VIDEO" }, { mediaType: { contains: "VIDEO", mode: "insensitive" } }] },
       status: { in: ["PLANNING", "DRAFT", "NEED_APPROVAL", "READY_TO_RENDER", "RENDERED"] },
     },
     orderBy: { updatedAt: "desc" },
