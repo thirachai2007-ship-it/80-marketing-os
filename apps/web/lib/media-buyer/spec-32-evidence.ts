@@ -100,17 +100,23 @@ export async function getSpec32Evidence() {
           (left, right) =>
             Number(left.meta.sweepPage) - Number(right.meta.sweepPage),
         );
-        const contiguous = pages.every(
+        const terminalIndex = pages.findIndex(
+          (item) =>
+            item.run.status === "COMPLETED" && item.meta.hasNext === false,
+        );
+        const inventoryPages =
+          terminalIndex >= 0 ? pages.slice(0, terminalIndex + 1) : pages;
+        const contiguous = inventoryPages.every(
           (item, index) => Number(item.meta.sweepPage) === index + 1,
         );
-        const final = pages[pages.length - 1];
-        return pages.length > 0 &&
+        const final = inventoryPages[inventoryPages.length - 1];
+        return inventoryPages.length > 0 &&
           contiguous &&
-          pages.every((item) => item.run.status === "COMPLETED") &&
+          inventoryPages.every((item) => item.run.status === "COMPLETED") &&
           final.meta.hasNext === false
           ? {
               sweepId,
-              pages: pages.length,
+              pages: inventoryPages.length,
               completedAt: final.run.completedAt,
               finalItemsFound: final.run.itemsFound,
             }
