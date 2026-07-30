@@ -1,24 +1,24 @@
 import { runCampaignBuilderBatch } from "@/lib/media-buyer/campaign-builder";
-import { getContentAnalysisCutoff } from "@/lib/media-buyer/content-analysis-policy";
+import { selectCampaignCandidates, type CandidateProductCategory } from "@/lib/media-buyer/candidate-selector";
 import prisma from "@/lib/prisma";
 
 export const PRODUCT_CAMPAIGN_COVERAGE_VERSION = "product-campaign-coverage-v1";
 const COVERED_DRAFT_STATUSES = ["PLANNING", "PAUSED", "READY", "READY_FOR_APPROVAL", "APPROVED", "READY_TO_PUBLISH", "PUBLISHED"];
 
 export async function getProductCampaignCoverage() {
-  const cutoff = getContentAnalysisCutoff();
   const policies = await prisma.pageProductPolicy.findMany({
     where: { isEnabled: true, page: { isActive: true } },
     orderBy: [{ page: { name: "asc" } }, { productCategory: "asc" }],
-    select: { pageId: true, productCategory: true, minimumScore: true, minimumAds: true, page: { select: { name: true, adAccountId: true } } },
+    select: { pageId: true, productCategory: true, minimumScore: true, minimumAds: true, maximumAds: true, allowExistingPost: true, allowDarkPost: true, useOldWinningContent: true, page: { select: { name: true, adAccountId: true } } },
   });
   const coverage = await Promise.all(policies.map(async (policy) => {
-    const [suitableContentCount, campaignDraftCount] = await Promise.all([
-      prisma.pageContent.count({ where: { pageId: policy.pageId, productCategory: policy.productCategory, createdTime: { gte: cutoff }, isDuplicate: false, analysisStatus: "COMPLETED", analysis: { is: { totalScore: { gte: policy.minimumScore } } } } }),
+    const [selection, campaignDraftCount] = await Promise.all([
+      selectCampaignCandidates({ pageId: policy.pageId, productCategory: policy.productCategory as CandidateProductCategory, minimumScore: policy.minimumScore, minimumAds: policy.minimumAds, maximumAds: policy.maximumAds, allowExistingPost: policy.allowExistingPost, allowDarkPost: policy.allowDarkPost, useOldWinningContent: policy.useOldWinningContent, candidateLimit: 300 }),
       prisma.campaignDraft.count({ where: { pageId: policy.pageId, productCategory: policy.productCategory, status: { in: COVERED_DRAFT_STATUSES } } }),
     ]);
-    const suitable = suitableContentCount >= policy.minimumAds;
-    return { pageId: policy.pageId, pageName: policy.page.name, adAccountId: policy.page.adAccountId, productCategory: policy.productCategory, minimumScore: policy.minimumScore, minimumAds: policy.minimumAds, suitableContentCount, suitable, campaignDraftCount, covered: !suitable || campaignDraftCount > 0 };
+    const suitableContentCount = selection.selectedCandidateCount;
+    const suitable = selection.hasEnoughCandidates;
+    return { pageId: policy.pageId, pageName: policy.page.name, adAccountId: policy.page.adAccountId, productCategory: policy.productCategory, minimumScore: policy.minimumScore, minimumAds: policy.minimumAds, rawCandidateCount: selection.rawCandidateCount, eligibleCandidateCount: selection.eligibleCandidateCount, suitableContentCount, suitable, campaignDraftCount, covered: !suitable || campaignDraftCount > 0 };
   }));
   const eligible = coverage.filter((item) => item.suitable);
   const gaps = eligible.filter((item) => !item.covered);
