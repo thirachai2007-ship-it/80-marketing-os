@@ -33,8 +33,11 @@ export async function runMetaIntegrationHealthMonitor() {
     }
     const activeAdAccounts = await prisma.adAccount.count({ where: { metaConnectionId: connection.id, isActive: true } });
     if (activeAdAccounts === 0) alerts.push({ severity: "CRITICAL", code: "AD_ACCOUNT_ACCESS_MISSING", message: "No active Ad Account is available for tracking." });
-    const failedSyncs = await prisma.metaSyncRun.count({ where: { metaConnectionId: connection.id, status: "FAILED", createdAt: { gte: new Date(checkedAt.getTime() - 24 * 60 * 60 * 1000) } } });
-    if (failedSyncs > 0) alerts.push({ severity: "CRITICAL", code: "RECENT_SYNC_FAILURES", message: `${failedSyncs} Meta Sync operation(s) failed in the last 24 hours.` });
+    const recentSyncs = await prisma.metaSyncRun.findMany({ where: { metaConnectionId: connection.id, createdAt: { gte: new Date(checkedAt.getTime() - 24 * 60 * 60 * 1000) } }, orderBy: { createdAt: "desc" }, take: 500, select: { resourceType: true, status: true } });
+    const latestStatusByResource = new Map<string, string>();
+    for (const sync of recentSyncs) if (!latestStatusByResource.has(sync.resourceType)) latestStatusByResource.set(sync.resourceType, sync.status);
+    const unresolvedFailedResources = [...latestStatusByResource].filter(([, status]) => status === "FAILED").map(([resource]) => resource);
+    if (unresolvedFailedResources.length > 0) alerts.push({ severity: "CRITICAL", code: "UNRESOLVED_SYNC_FAILURES", message: `Latest Meta Sync still fails for: ${unresolvedFailedResources.join(", ")}.` });
     if (connection.lastErrorCode) alerts.push({ severity: "CRITICAL", code: "META_CONNECTION_ERROR", message: `${connection.lastErrorCode}: ${connection.lastErrorMessage ?? "Meta connection error"}` });
   }
   const status = alerts.some((item) => item.severity === "CRITICAL") ? "UNHEALTHY" : alerts.length > 0 ? "WARNING" : "HEALTHY";
