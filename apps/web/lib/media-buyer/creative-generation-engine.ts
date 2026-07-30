@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import prisma from "@/lib/prisma";
 
-export const CREATIVE_GENERATION_ENGINE_VERSION = "creative-generation-engine-v1";
+export const CREATIVE_GENERATION_ENGINE_VERSION = "creative-generation-engine-v2";
 
 const VARIANTS = [
   { role: "STATIC_IMAGE", aspectRatio: "9:16", width: 1024, height: 1536, placement: "STORIES_REELS", instruction: "Create a clean vertical still advertisement with one clear benefit and readable safe-area composition." },
@@ -22,12 +22,23 @@ function parseObject(value: string | null) {
   }
 }
 
-export async function prepareCreativeGenerationSet(input: { creativeAssetId?: string } = {}) {
+export async function prepareCreativeGenerationSet(input: {
+  creativeAssetId?: string;
+  productCategory?: string;
+} = {}) {
   const asset = await prisma.creativeAsset.findFirst({
     where: {
       ...(input.creativeAssetId ? { id: input.creativeAssetId } : {}),
+      ...(input.productCategory ? { productCategory: input.productCategory } : {}),
       isActive: true,
       originalMediaUrl: { not: null },
+      sourceContent: {
+        is: {
+          productConfidence: { gte: 75 },
+          productEvidence: { contains: "source=AI" },
+          ...(input.productCategory ? { productCategory: input.productCategory } : {}),
+        },
+      },
     },
     orderBy: [
       { status: "desc" },
@@ -41,7 +52,11 @@ export async function prepareCreativeGenerationSet(input: { creativeAssetId?: st
       },
     },
   });
-  if (!asset) throw new Error("ไม่พบ Creative Asset ที่มีภาพสินค้าต้นฉบับ");
+  if (!asset) {
+    throw new Error(
+      "ไม่พบ Creative Asset ที่ AI วิเคราะห์จากภาพจริงด้วย confidence อย่างน้อย 75 และตรงกับหมวดสินค้าที่ขอ",
+    );
+  }
 
   const existingRoles = new Set(
     asset.revisions.map((revision) => parseObject(revision.metadataJson).creativeRole),

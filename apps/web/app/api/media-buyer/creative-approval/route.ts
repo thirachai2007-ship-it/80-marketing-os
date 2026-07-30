@@ -28,7 +28,15 @@ export async function GET(request: NextRequest) {
     where: {
       status: "NEED_APPROVAL",
       approvalStatus: "NOT_SUBMITTED",
-      creativeAsset: { isActive: true },
+      creativeAsset: {
+        isActive: true,
+        sourceContent: {
+          is: {
+            productConfidence: { gte: 75 },
+            productEvidence: { contains: "source=AI" },
+          },
+        },
+      },
     },
     orderBy: { updatedAt: "desc" },
     take: 100,
