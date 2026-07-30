@@ -1067,6 +1067,12 @@ export async function generateCreativeRevisionVariants(
 
                 ownerApprovalRequired:
                   true,
+
+                netProfitFirst:
+                  true,
+
+                ctrCpmDiagnosticOnly:
+                  true,
               }),
 
             policyReference:

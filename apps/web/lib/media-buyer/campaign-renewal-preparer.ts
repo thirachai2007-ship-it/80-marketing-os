@@ -86,7 +86,7 @@ export async function runCampaignRenewalPreparation() {
             confidence: 100,
             inputJson: JSON.stringify({ sourceCampaignId: campaign.id, sourceCampaignName: campaign.name, adAccountId: campaign.adAccountId, pageId: page.id, stopTime: campaign.stopTime?.toISOString() }),
             outputJson: JSON.stringify({ successorCampaignDraftId: created.id, status: "PAUSED", productCategory: category }),
-            policyJson: JSON.stringify({ leadDays: CAMPAIGN_RENEWAL_LEAD_DAYS, oneSuccessorPerSource: true, ownerApprovalRequired: true, publishAutomatically: false }),
+            policyJson: JSON.stringify({ leadDays: CAMPAIGN_RENEWAL_LEAD_DAYS, oneSuccessorPerSource: true, ownerApprovalRequired: true, publishAutomatically: false, netProfitFirst: true, ctrCpmDiagnosticOnly: true }),
             policyReference: "Master Spec 37",
           },
         });
