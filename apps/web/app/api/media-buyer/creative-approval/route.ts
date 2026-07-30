@@ -34,10 +34,7 @@ export async function GET(request: NextRequest) {
     where: {
       status: "NEED_APPROVAL",
       approvalStatus: "NOT_SUBMITTED",
-      OR: [
-        { metadataJson: { contains: "\"visualProductValidated\":true" } },
-        { metadataJson: { contains: "\"videoEditValidated\":true" } },
-      ],
+      metadataJson: { contains: "\"visualProductValidated\":true" },
       creativeAsset: { isActive: true },
     },
     orderBy: { updatedAt: "desc" },

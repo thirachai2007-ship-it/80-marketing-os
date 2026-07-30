@@ -3,9 +3,7 @@ import { createHash } from "node:crypto";
 import {
   selectCampaignCandidates,
   type CandidateProductCategory,
-  type SelectedCampaignCandidate,
 } from "@/lib/media-buyer/candidate-selector";
-import { resolveFallbackCreativeMode } from "@/lib/media-buyer/content-fallback-policy";
 
 import prisma from "@/lib/prisma";
 
@@ -121,85 +119,6 @@ function normalizeText(
   return (value ?? "")
     .normalize("NFKC")
     .trim();
-}
-
-function safeParseObject(
-  value?: string | null,
-): Record<string, unknown> {
-  if (!value) {
-    return {};
-  }
-
-  try {
-    const parsed =
-      JSON.parse(value) as unknown;
-
-    if (
-      parsed &&
-      typeof parsed === "object" &&
-      !Array.isArray(parsed)
-    ) {
-      return parsed as Record<
-        string,
-        unknown
-      >;
-    }
-  } catch {
-    // Return empty object.
-  }
-
-  return {};
-}
-
-function numberValue(
-  value: unknown,
-  fallback: number,
-): number {
-  return typeof value === "number" &&
-    Number.isFinite(value)
-    ? value
-    : fallback;
-}
-
-function readCreativeScores(
-  metadataJson?: string | null,
-): {
-  creativeScore: number;
-  rankingScore: number;
-} {
-  const root =
-    safeParseObject(metadataJson);
-
-  const engine =
-    root.creativeAssetEngine;
-
-  if (
-    !engine ||
-    typeof engine !== "object" ||
-    Array.isArray(engine)
-  ) {
-    return {
-      creativeScore: 0,
-      rankingScore: 0,
-    };
-  }
-
-  const value =
-    engine as Record<string, unknown>;
-
-  return {
-    creativeScore:
-      numberValue(
-        value.creativeScore,
-        0,
-      ),
-
-    rankingScore:
-      numberValue(
-        value.rankingScore,
-        0,
-      ),
-  };
 }
 
 function chooseCallToAction(input: {
@@ -320,34 +239,8 @@ function buildAdFingerprint(input: {
     .digest("hex");
 }
 
-function chooseCreativeMode(
-  candidate: SelectedCampaignCandidate,
-): string {
-  if (candidate.selectionMode === "WINNING_FALLBACK") {
-    return resolveFallbackCreativeMode(candidate.selectionMode, "EXISTING_POST");
-  }
-  if (
-    candidate.analysis
-      .recommendation ===
-      "USE_EXISTING_POST" &&
-    candidate.analysis.useExistingPost
-  ) {
-    return "EXISTING_POST";
-  }
-
-  if (
-    candidate.analysis
-      .recommendation ===
-      "CREATE_DARK_POST" &&
-    candidate.analysis.darkPostEligible
-  ) {
-    return "DARK_POST_REQUIRED";
-  }
-
-  return candidate.analysis
-    .darkPostEligible
-    ? "DARK_POST_REQUIRED"
-    : "EXISTING_POST";
+function chooseCreativeMode(): string {
+  return "EXISTING_POST";
 }
 
 async function loadDraftAdSource(
@@ -384,66 +277,12 @@ async function loadDraftAdSource(
     return null;
   }
 
-  const asset =
-    await prisma.creativeAsset.findFirst({
-      where: {
-        sourceContentId:
-          content.id,
-        isActive:
-          true,
-        status: {
-          in: [
-            "READY",
-            "NEED_OPTIMIZATION",
-          ],
-        },
-      },
-
-      orderBy: {
-        updatedAt:
-          "desc",
-      },
-
-      select: {
-        id: true,
-        metadataJson: true,
-        mediaType: true,
-
-        revisions: {
-          orderBy: {
-            version:
-              "desc",
-          },
-
-          take:
-            1,
-
-          select: {
-            id: true,
-            primaryText: true,
-            headline: true,
-            description: true,
-            callToAction: true,
-            mediaUrl: true,
-            thumbnailUrl: true,
-          },
-        },
-      },
-    });
-
-  const revision =
-    asset?.revisions[0] ??
-    null;
-
   const message =
     normalizeText(
       content.message,
     );
 
   const primaryText =
-    normalizeText(
-      revision?.primaryText,
-    ) ||
     message;
 
   const recommendation =
@@ -452,9 +291,6 @@ async function loadDraftAdSource(
     "UNKNOWN";
 
   const callToAction =
-    normalizeText(
-      revision?.callToAction,
-    ) ||
     chooseCallToAction({
       objective,
       suggestedObjective:
@@ -467,7 +303,6 @@ async function loadDraftAdSource(
   const headline =
     chooseHeadline({
       revisionHeadline:
-        revision?.headline ??
         null,
       contentMessage:
         primaryText,
@@ -475,29 +310,19 @@ async function loadDraftAdSource(
     });
 
   const description =
-    normalizeText(
-      revision?.description,
-    ) ||
     chooseDescription({
       productCategory,
       pageName,
     });
-
-  const scores =
-    readCreativeScores(
-      asset?.metadataJson,
-    );
 
   return {
     contentId:
       content.id,
 
     creativeAssetId:
-      asset?.id ??
       null,
 
     creativeRevisionId:
-      revision?.id ??
       null,
 
     message,
@@ -508,15 +333,12 @@ async function loadDraftAdSource(
     callToAction,
 
     mediaType:
-      asset?.mediaType ||
       content.mediaType,
 
     mediaUrl:
-      revision?.mediaUrl ||
       content.mediaUrl,
 
     thumbnailUrl:
-      revision?.thumbnailUrl ||
       content.thumbnailUrl,
 
     recommendation,
@@ -527,10 +349,10 @@ async function loadDraftAdSource(
       0,
 
     creativeScore:
-      scores.creativeScore,
+      content.analysis?.totalScore ?? 0,
 
     rankingScore:
-      scores.rankingScore,
+      content.analysis?.totalScore ?? 0,
   };
 }
 
@@ -656,9 +478,7 @@ async function createAdsWhenMissing(input: {
           index + 1,
 
         creativeMode:
-          chooseCreativeMode(
-            candidate,
-          ),
+          chooseCreativeMode(),
 
         adName: [
           input.campaignName,
