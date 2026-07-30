@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { hasValidOwnerSession, isSameOriginRequest } from "@/lib/owner-session";
+import { isValidatedCreativeMetadata } from "@/lib/media-buyer/creative-product-consistency";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,15 +29,8 @@ export async function GET(request: NextRequest) {
     where: {
       status: "NEED_APPROVAL",
       approvalStatus: "NOT_SUBMITTED",
-      creativeAsset: {
-        isActive: true,
-        sourceContent: {
-          is: {
-            productConfidence: { gte: 75 },
-            productEvidence: { contains: "source=AI" },
-          },
-        },
-      },
+      metadataJson: { contains: "\"visualProductValidated\":true" },
+      creativeAsset: { isActive: true },
     },
     orderBy: { updatedAt: "desc" },
     take: 100,
@@ -53,6 +47,7 @@ export async function GET(request: NextRequest) {
       thumbnailUrl: true,
       aiReason: true,
       editInstructions: true,
+      metadataJson: true,
       updatedAt: true,
       creativeAsset: {
         select: {
@@ -68,7 +63,11 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     ok: true,
     authenticated: true,
-    items: revisions.map((revision) => ({
+    items: revisions.filter((revision) => {
+      let metadata: Record<string, unknown> = {};
+      try { metadata = JSON.parse(revision.metadataJson ?? "{}") as Record<string, unknown>; } catch {}
+      return isValidatedCreativeMetadata(metadata, revision.creativeAsset.productCategory);
+    }).map((revision) => ({
       id: revision.id,
       version: revision.version,
       revisionType: revision.revisionType,
@@ -114,9 +113,14 @@ export async function POST(request: NextRequest) {
   }
   const revision = await prisma.creativeRevision.findUnique({
     where: { id: creativeRevisionId },
-    select: { id: true, status: true, approvalStatus: true, sourceFingerprint: true, updatedAt: true, creativeAsset: { select: { sourceContentId: true } } },
+    select: { id: true, status: true, approvalStatus: true, sourceFingerprint: true, metadataJson: true, creativeAsset: { select: { sourceContentId: true, productCategory: true } } },
   });
   if (!revision) return NextResponse.json({ ok: false, error: "ไม่พบ Creative Revision" }, { status: 404 });
+  let metadata: Record<string, unknown> = {};
+  try { metadata = JSON.parse(revision.metadataJson ?? "{}") as Record<string, unknown>; } catch {}
+  if (!isValidatedCreativeMetadata(metadata, revision.creativeAsset.productCategory)) {
+    return NextResponse.json({ ok: false, error: "Creative นี้ไม่ผ่านการยืนยันประเภทสินค้าจากภาพจริง" }, { status: 409 });
+  }
   if (revision.status !== "NEED_APPROVAL" || revision.approvalStatus !== "NOT_SUBMITTED") {
     return NextResponse.json({ ok: false, error: "Creative Revision ไม่ได้อยู่ในคิวรออนุมัติ" }, { status: 409 });
   }

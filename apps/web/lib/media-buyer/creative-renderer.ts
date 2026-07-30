@@ -3,6 +3,7 @@ import {
 } from "node:crypto";
 
 import prisma from "@/lib/prisma";
+import { isValidatedCreativeMetadata } from "@/lib/media-buyer/creative-product-consistency";
 
 export const CREATIVE_RENDERING_ENGINE_VERSION =
   "creative-rendering-engine-v1";
@@ -745,6 +746,20 @@ export async function renderCreativeRevision(
 
   const asset =
     revision.creativeAsset;
+
+  if (!isValidatedCreativeMetadata(safeParseObject(revision.metadataJson), asset.productCategory)) {
+    return {
+      rendererVersion: CREATIVE_RENDERING_ENGINE_VERSION,
+      status: "SKIPPED",
+      creativeAssetId: asset.id,
+      creativeRevisionId: revision.id,
+      revisionVersion: revision.version,
+      revisionType: revision.revisionType,
+      paidRenderExecuted: false,
+      ownerApprovalRequired: true,
+      reason: "Creative ไม่ผ่านการยืนยันประเภทสินค้าจากภาพจริง",
+    };
+  }
 
   const common = {
     rendererVersion:
@@ -1553,23 +1568,14 @@ export async function runCreativeRenderingBatch(
           ],
         },
 
+        metadataJson: {
+          contains: "\"visualProductValidated\":true",
+        },
+
         creativeAsset: {
           is: {
             isActive:
               true,
-
-            sourceContent: {
-              is: {
-                productConfidence: {
-                  gte: 75,
-                },
-
-                productEvidence: {
-                  contains:
-                    "source=AI",
-                },
-              },
-            },
 
             ...(options.pageId
               ? {

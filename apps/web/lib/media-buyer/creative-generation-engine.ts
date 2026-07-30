@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import prisma from "@/lib/prisma";
+import { isVisualProductConsistent, parseVisualProductEvidence } from "@/lib/media-buyer/creative-product-consistency";
 
-export const CREATIVE_GENERATION_ENGINE_VERSION = "creative-generation-engine-v2";
+export const CREATIVE_GENERATION_ENGINE_VERSION = "creative-generation-engine-v3";
 
 const VARIANTS = [
   { role: "STATIC_IMAGE", aspectRatio: "9:16", width: 1024, height: 1536, placement: "STORIES_REELS", instruction: "Create a clean vertical still advertisement with one clear benefit and readable safe-area composition." },
@@ -26,19 +27,12 @@ export async function prepareCreativeGenerationSet(input: {
   creativeAssetId?: string;
   productCategory?: string;
 } = {}) {
-  const asset = await prisma.creativeAsset.findFirst({
+  const candidates = await prisma.creativeAsset.findMany({
     where: {
       ...(input.creativeAssetId ? { id: input.creativeAssetId } : {}),
       ...(input.productCategory ? { productCategory: input.productCategory } : {}),
       isActive: true,
       originalMediaUrl: { not: null },
-      sourceContent: {
-        is: {
-          productConfidence: { gte: 75 },
-          productEvidence: { contains: "source=AI" },
-          ...(input.productCategory ? { productCategory: input.productCategory } : {}),
-        },
-      },
     },
     orderBy: [
       { status: "desc" },
@@ -46,17 +40,25 @@ export async function prepareCreativeGenerationSet(input: {
     ],
     include: {
       page: { select: { name: true } },
+      sourceContent: { select: { productEvidence: true } },
       revisions: {
         select: { id: true, version: true, metadataJson: true },
         orderBy: { version: "asc" },
       },
     },
+    take: input.creativeAssetId ? 1 : 200,
   });
+  const asset = candidates.find((candidate) => isVisualProductConsistent({
+    productCategory: candidate.productCategory,
+    productEvidence: candidate.sourceContent?.productEvidence,
+  }));
   if (!asset) {
     throw new Error(
       "ไม่พบ Creative Asset ที่ AI วิเคราะห์จากภาพจริงด้วย confidence อย่างน้อย 75 และตรงกับหมวดสินค้าที่ขอ",
     );
   }
+  const visualEvidence = parseVisualProductEvidence(asset.sourceContent?.productEvidence);
+  if (!visualEvidence) throw new Error("ไม่พบหลักฐานการจำแนกสินค้าจากภาพจริง");
 
   const existingRoles = new Set(
     asset.revisions.map((revision) => parseObject(revision.metadataJson).creativeRole),
@@ -120,6 +122,9 @@ export async function prepareCreativeGenerationSet(input: {
           netProfitFirst: true,
           brandName: asset.page.name,
           productCategory: asset.productCategory,
+          visualProductValidated: true,
+          visualProductCategory: visualEvidence.category,
+          visualProductConfidence: visualEvidence.confidence,
         }),
         approvalStatus: "NOT_SUBMITTED",
       },
