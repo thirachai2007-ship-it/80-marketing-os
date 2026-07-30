@@ -25,6 +25,7 @@ import { useCallback, useEffect, useState } from "react";
 
 type ConnectionStatus = {
   connected: boolean;
+  healthAlerts?: Array<{ action: string; reason: string; createdAt: string }>;
   status?: string;
   connection?: {
     displayName: string | null;
@@ -310,6 +311,13 @@ export default function MetaSettingsPanel() {
         <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
           {error}
         </div>
+      )}
+
+      {!!data.connection.healthAlerts?.length && data.connection.healthAlerts[0].action !== "META_INTEGRATION_RECOVERED" && (
+        <section className="rounded-2xl border border-amber-300 bg-amber-50 px-5 py-4 text-sm text-amber-900" role="alert">
+          <strong>Meta Integration ต้องตรวจสอบ</strong>
+          <p className="mt-1 text-xs leading-5">{data.connection.healthAlerts[0].reason}</p>
+        </section>
       )}
 
       <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[var(--shadow-card)]">

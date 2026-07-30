@@ -12,6 +12,7 @@ import { recordDailyOverviewReport } from "@/lib/media-buyer/daily-overview-repo
 import { runContinuousOutcomeLearning } from "@/lib/media-buyer/continuous-learning-loop";
 import { recordDailyCompanyPortfolioOptimization } from "@/lib/media-buyer/company-portfolio-optimizer";
 import { recordDailyPerformanceProofBenchmark } from "@/lib/media-buyer/performance-proof-benchmark";
+import { runMetaIntegrationHealthMonitor } from "@/lib/meta/integration-health-monitor";
 
 export const AUTONOMY_KERNEL_VERSION =
   "80ai-autonomy-kernel-v1";
@@ -347,6 +348,8 @@ export async function runAutonomyKernel() {
 
   try {
     const steps: StepResult[] = [];
+
+    steps.push(await runStep("META_INTEGRATION_HEALTH", () => runMetaIntegrationHealthMonitor()));
 
     steps.push(
       await runStep("META_POST_SYNC", () =>
