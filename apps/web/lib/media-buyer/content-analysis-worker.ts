@@ -117,6 +117,7 @@ export type ContentAnalysisWorkerBatchResult = {
 };
 
 type AnalysisOutput = {
+  contentIntent: "SALES" | "REVIEW" | "EDUCATIONAL" | "COMEDY" | "BEHIND_THE_SCENES" | "BRAND_ENGAGEMENT" | "UNKNOWN";
   productCategory: ProductCategory;
   productConfidence: number;
   productEvidence: string;
@@ -490,20 +491,6 @@ function resolveHybridProductCategory(input: {
         "EXISTING_LABEL",
       reasons: [
         `ใช้หมวดเดิม ${existingCategory} เพราะ AI และ Keyword ยังไม่ชัด`,
-      ],
-    };
-  }
-
-  const pageDefault =
-    PAGE_DEFAULT_CATEGORY_RULES[input.pageId];
-
-  if (pageDefault) {
-    return {
-      productCategory: pageDefault,
-      confidence: 55,
-      source: "PAGE_DEFAULT",
-      reasons: [
-        `ไม่มีสัญญาณสินค้าที่ชัดเจนในโพสต์ จึงใช้หมวดหลักของเพจ ${pageDefault}`,
       ],
     };
   }
@@ -1053,6 +1040,7 @@ function parseAnalysisOutput(
     );
 
   return {
+    contentIntent: (["SALES", "REVIEW", "EDUCATIONAL", "COMEDY", "BEHIND_THE_SCENES", "BRAND_ENGAGEMENT", "UNKNOWN"] as const).find((intent) => intent === stringValue(raw.contentIntent).toUpperCase()) ?? "UNKNOWN",
     productCategory:
       normalizeProductCategory(
         raw.productCategory,
@@ -1351,6 +1339,9 @@ function parseAnalysisOutput(
 function buildSystemPrompt(): string {
   return [
     "For VIDEO, analyze every supplied temporal frame together with the caption; a cover thumbnail alone is not the video.",
+    "Classify contentIntent separately from productCategory as SALES, REVIEW, EDUCATIONAL, COMEDY, BEHIND_THE_SCENES, BRAND_ENGAGEMENT, or UNKNOWN.",
+    "A staff uniform, logo on an employee shirt, or product merely present in the background is not evidence that the post sells that product.",
+    "For COMEDY, POV jokes, staff-life, or entertainment without a clear product offer, set productCategory UNKNOWN unless a product is explicitly demonstrated or offered for sale.",
     "Transcribe all legible text visible in supplied images or video frames into visibleText. Use an empty array only when no text is visible.",
     "Return concrete visualObservations and contextObservations so every modality can be audited independently of the score.",
     "คุณคือ Senior Meta Ads Creative Analyst ของธุรกิจ 80t-shirt ในประเทศไทย",
@@ -1406,6 +1397,8 @@ function buildUserPrompt(input: {
     "ส่ง JSON ตามโครงสร้างนี้:",
     JSON.stringify(
       {
+        contentIntent:
+          "UNKNOWN",
         productCategory:
           "UNKNOWN",
         productConfidence:

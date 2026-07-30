@@ -9,13 +9,54 @@ import ffmpegPath from "ffmpeg-static";
 import prisma from "@/lib/prisma";
 
 export const VIDEO_EDITING_ENGINE_VERSION = "video-editing-engine-v2";
-export const VIDEO_EDITING_LIBRARY_VERSION = "video-editing-library-v1";
+export const VIDEO_EDITING_LIBRARY_VERSION = "video-editing-library-v2";
 const execFileAsync = promisify(execFile);
 const VIDEO_LIBRARY_WINDOW_DAYS = 75;
 
 function parseObject(value: string | null) {
   try { const parsed = value ? JSON.parse(value) as unknown : {}; return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {}; }
   catch { return {}; }
+}
+
+export type ContentIntent = "SALES" | "REVIEW" | "EDUCATIONAL" | "COMEDY" | "BEHIND_THE_SCENES" | "BRAND_ENGAGEMENT" | "UNKNOWN";
+
+type IntentEvidence = {
+  recommendation: string;
+  productVisibilityScore: number;
+  offerClarityScore: number;
+  salesPotentialScore: number;
+  summary: string;
+  visibleTextJson: string;
+  visualObservationsJson: string;
+  contextObservationsJson: string;
+  rawAnalysisJson: string | null;
+};
+
+function normalizeIntent(value: unknown): ContentIntent | null {
+  const intent = typeof value === "string" ? value.trim().toUpperCase() : "";
+  return (["SALES", "REVIEW", "EDUCATIONAL", "COMEDY", "BEHIND_THE_SCENES", "BRAND_ENGAGEMENT", "UNKNOWN"] as const).find((item) => item === intent) ?? null;
+}
+
+export function classifyContentIntent(analysis: IntentEvidence): { contentIntent: ContentIntent; isSalesCandidate: boolean; reason: string } {
+  const raw = parseObject(analysis.rawAnalysisJson);
+  const explicit = normalizeIntent(raw.contentIntent);
+  const evidence = [analysis.summary, analysis.visibleTextJson, analysis.visualObservationsJson, analysis.contextObservationsJson].join(" ").normalize("NFKC").toLowerCase();
+  const inferred: ContentIntent = /ตลก|ขำ|มุก|แกล้ง|pov\s*[:：]?|comedy|humou?r|นอนแค่/.test(evidence)
+    ? "COMEDY"
+    : /รีวิว|ลูกค้า|testimonial|review/.test(evidence)
+      ? "REVIEW"
+      : /เบื้องหลัง|ชีวิตทีมงาน|พนักงาน|behind.?the.?scenes/.test(evidence)
+        ? "BEHIND_THE_SCENES"
+        : /วิธี|สอน|ขั้นตอน|ความรู้|educat|how.?to/.test(evidence)
+          ? "EDUCATIONAL"
+          : analysis.offerClarityScore >= 35 && analysis.salesPotentialScore >= 50
+            ? "SALES"
+            : "BRAND_ENGAGEMENT";
+  const contentIntent = explicit ?? inferred;
+  const paidAdIntents: ContentIntent[] = ["SALES", "REVIEW", "EDUCATIONAL"];
+  const isSalesCandidate = paidAdIntents.includes(contentIntent) && analysis.recommendation !== "REJECT" && analysis.productVisibilityScore >= 35 && analysis.salesPotentialScore >= 50;
+  const reason = isSalesCandidate ? "มีสินค้าและข้อเสนอขายชัดเจน" : contentIntent === "COMEDY" ? "คลิปตลก/POV ไม่ใช่คลิปขาย" : "ยังไม่มีหลักฐานเพียงพอว่าเป็นคลิปขาย";
+  return { contentIntent, isSalesCandidate, reason };
 }
 
 export type VideoEditPlanInput = {
@@ -40,13 +81,17 @@ function clamp(value: number, minimum: number, maximum: number) {
 export async function planVideoEdit(input: VideoEditPlanInput) {
   const revision = await prisma.creativeRevision.findUnique({
     where: { id: input.creativeRevisionId },
-    include: { creativeAsset: true },
+    include: { creativeAsset: { include: { sourceContent: { include: { analysis: true } } } } },
   });
 
   if (!revision) throw new Error("ไม่พบ Creative Revision");
   const sourceIsVideo = revision.creativeAsset.mediaType.toUpperCase().includes("VIDEO");
   if (revision.revisionType !== "VIDEO_EDIT" && revision.creativeAsset.assetType !== "VIDEO" && !sourceIsVideo) {
     throw new Error("Video Editing Engine รองรับเฉพาะ Video Asset");
+  }
+  const sourceAnalysis = revision.creativeAsset.sourceContent?.analysis;
+  if (!sourceAnalysis || !classifyContentIntent(sourceAnalysis).isSalesCandidate) {
+    throw new Error("คลิปนี้ไม่ใช่คลิปขาย ระบบจึงไม่ส่งเข้าคิวตัดต่อโฆษณา");
   }
 
   const placement = input.placement ?? "REELS";
@@ -157,7 +202,6 @@ export async function syncVideoEditingLibrary() {
   const contents = await prisma.pageContent.findMany({
     where: {
       page: { isActive: true }, analysisStatus: "COMPLETED", isDuplicate: false,
-      productCategory: { not: "UNKNOWN" },
       mediaType: { contains: "VIDEO", mode: "insensitive" },
       mediaUrl: { not: null }, createdTime: { gte: createdAfter },
     },
@@ -165,25 +209,40 @@ export async function syncVideoEditingLibrary() {
     select: {
       id: true, pageId: true, pageName: true, productCategory: true, mediaType: true,
       mediaUrl: true, thumbnailUrl: true, message: true, contentFingerprint: true, fingerprint: true,
-      analysis: { select: { id: true } },
+      analysis: { select: { id: true, recommendation: true, productVisibilityScore: true, offerClarityScore: true, salesPotentialScore: true, summary: true, visibleTextJson: true, visualObservationsJson: true, contextObservationsJson: true, rawAnalysisJson: true } },
       creativeAssets: { where: { isActive: true }, select: { id: true }, take: 1 },
     },
   });
+  let correctedNonSalesClassifications = 0;
+  for (const content of contents) {
+    if (!content.analysis) continue;
+    const intent = classifyContentIntent(content.analysis);
+    const shouldClearProduct = !intent.isSalesCandidate && ["COMEDY", "BEHIND_THE_SCENES", "BRAND_ENGAGEMENT"].includes(intent.contentIntent) && content.productCategory !== "UNKNOWN";
+    if (!shouldClearProduct) continue;
+    await prisma.$transaction([
+      prisma.pageContent.update({ where: { id: content.id }, data: { productCategory: "UNKNOWN", productConfidence: 0, productEvidence: `CONTENT_INTENT_GATE:${intent.contentIntent}:${intent.reason}` } }),
+      prisma.creativeAsset.updateMany({ where: { sourceContentId: content.id, isActive: true }, data: { productCategory: "UNKNOWN", optimizationReason: intent.reason } }),
+    ]);
+    correctedNonSalesClassifications += 1;
+  }
   const missing = contents.filter((content) => content.creativeAssets.length === 0);
   const createdRevisionIds: string[] = [];
   for (const content of missing) {
+    const intent = content.analysis ? classifyContentIntent(content.analysis) : { contentIntent: "UNKNOWN" as const, isSalesCandidate: false, reason: "ไม่พบผลวิเคราะห์" };
+    const effectiveProductCategory = intent.isSalesCandidate ? content.productCategory : "UNKNOWN";
     const createdId = await prisma.$transaction(async (tx) => {
       const existing = await tx.creativeAsset.findFirst({ where: { sourceContentId: content.id, isActive: true }, select: { id: true } });
       if (existing) return null;
       const metadataJson = JSON.stringify({
         libraryVersion: VIDEO_EDITING_LIBRARY_VERSION, rightsBasis: "OWNED_META_PAGE",
+        contentIntent: content.analysis ? classifyContentIntent(content.analysis).contentIntent : "UNKNOWN",
         sourceContentId: content.id, importedForVideoEditing: true,
         safety: { mediaEdited: false, campaignPublished: false, realSpendUsed: false },
       });
       const asset = await tx.creativeAsset.create({ data: {
         pageId: content.pageId, sourceContentId: content.id, sourceAnalysisId: content.analysis?.id ?? null,
-        name: `${content.pageName} | ${content.productCategory} | ${content.id}`,
-        assetType: "VIDEO", sourceMode: "OWNED_META_LIBRARY", productCategory: content.productCategory,
+        name: `${content.pageName} | ${effectiveProductCategory} | ${content.id}`,
+        assetType: "VIDEO", sourceMode: "OWNED_META_LIBRARY", productCategory: effectiveProductCategory,
         mediaType: content.mediaType, originalMediaUrl: content.mediaUrl, originalThumbnailUrl: content.thumbnailUrl,
         originalMessage: content.message, status: "PLANNING", approvalStatus: "NOT_SUBMITTED",
         optimizationReason: "นำวิดีโอของเพจที่วิเคราะห์เสร็จแล้วเข้าสู่ Video Editing Library",
@@ -216,7 +275,7 @@ export async function syncVideoEditingLibrary() {
   }
   return {
     libraryVersion: VIDEO_EDITING_LIBRARY_VERSION, windowDays: VIDEO_LIBRARY_WINDOW_DAYS,
-    eligibleVideos: contents.length, importedVideos: createdRevisionIds.length, createdRevisionIds,
+    libraryVideos: contents.length, importedVideos: createdRevisionIds.length, correctedNonSalesClassifications, createdRevisionIds,
     pages: [...pageCounts.values()].sort((a, b) => a.pageName.localeCompare(b.pageName, "th")),
     safety: { draftOnly: true, mediaEdited: false, campaignPublished: false, realSpendUsed: false, budgetChanged: false },
   };
@@ -240,17 +299,25 @@ export async function listVideoEditingCandidates() {
       durationMs: true,
       aspectRatio: true,
       editInstructions: true,
-      creativeAsset: { select: { sourceContentId: true, sourceContent: { select: { permalinkUrl: true } }, productCategory: true, name: true, originalMediaUrl: true, originalThumbnailUrl: true, page: { select: { id: true, name: true } } } },
+      creativeAsset: { select: { sourceContentId: true, sourceContent: { select: { permalinkUrl: true, analysis: { select: { recommendation: true, productVisibilityScore: true, offerClarityScore: true, salesPotentialScore: true, summary: true, visibleTextJson: true, visualObservationsJson: true, contextObservationsJson: true, rawAnalysisJson: true } } } }, productCategory: true, name: true, originalMediaUrl: true, originalThumbnailUrl: true, page: { select: { id: true, name: true } } } },
     },
   });
 
-  return revisions.map((revision) => ({
+  return revisions.map((revision) => {
+    const intent = revision.creativeAsset.sourceContent?.analysis
+      ? classifyContentIntent(revision.creativeAsset.sourceContent.analysis)
+      : { contentIntent: "UNKNOWN" as const, isSalesCandidate: false, reason: "ไม่พบผลวิเคราะห์เจตนาคอนเทนต์" };
+    return ({
     id: revision.id,
     version: revision.version,
     revisionType: revision.revisionType,
     status: revision.status,
     contentId: revision.creativeAsset.sourceContentId,
     productCategory: revision.creativeAsset.productCategory,
+    displayProductCategory: intent.isSalesCandidate ? revision.creativeAsset.productCategory : "ไม่ใช่คลิปขาย",
+    contentIntent: intent.contentIntent,
+    isSalesCandidate: intent.isSalesCandidate,
+    salesEligibilityReason: intent.reason,
     assetName: revision.creativeAsset.name,
     pageId: revision.creativeAsset.page.id,
     pageName: revision.creativeAsset.page.name,
@@ -262,5 +329,6 @@ export async function listVideoEditingCandidates() {
     durationMs: revision.durationMs,
     aspectRatio: revision.aspectRatio,
     hasEditPlan: Boolean(revision.editInstructions),
-  }));
+    });
+  });
 }
