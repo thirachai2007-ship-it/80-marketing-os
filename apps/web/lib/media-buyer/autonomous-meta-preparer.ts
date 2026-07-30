@@ -143,7 +143,7 @@ export async function prepareCampaignInMetaPaused(
     geo_locations: {
       countries: ["TH"],
     },
-    age_min: 18,
+    age_min: 20,
     age_max: 65,
   };
 
