@@ -6,6 +6,8 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import ffmpegPath from "ffmpeg-static";
 
+import { metaRequest } from "@/lib/meta/client";
+import { getActiveMetaConnection, getActiveMetaPagesWithTokens } from "@/lib/meta/connection-token";
 import prisma from "@/lib/prisma";
 
 export const VIDEO_EDITING_ENGINE_VERSION = "video-editing-engine-v2";
@@ -220,6 +222,54 @@ export async function syncVideoEditingLibrary() {
     pages: [...pageCounts.values()].sort((a, b) => a.pageName.localeCompare(b.pageName, "th")),
     safety: { draftOnly: true, mediaEdited: false, campaignPublished: false, realSpendUsed: false, budgetChanged: false },
   };
+}
+
+type MetaVideoAttachment = {
+  target?: { id?: string };
+  subattachments?: { data?: MetaVideoAttachment[] };
+};
+type MetaVideoPost = { attachments?: { data?: MetaVideoAttachment[] } };
+type MetaVideoObject = { id?: string; source?: string };
+
+export async function resolveOwnedMetaVideoSource(creativeRevisionId: string) {
+  const revision = await prisma.creativeRevision.findUnique({
+    where: { id: creativeRevisionId },
+    include: { creativeAsset: { include: { sourceContent: true } } },
+  });
+  if (!revision?.creativeAsset.sourceContent) throw new Error("ไม่พบโพสต์ต้นฉบับของวิดีโอ");
+  const assetMetadata = parseObject(revision.creativeAsset.metadataJson);
+  const resolvedAt = typeof assetMetadata.metaVideoSourceResolvedAt === "string" ? Date.parse(assetMetadata.metaVideoSourceResolvedAt) : 0;
+  if (assetMetadata.metaVideoSourceResolved === true && revision.creativeAsset.originalMediaUrl && Date.now() - resolvedAt < 60 * 60 * 1000) {
+    return { creativeRevisionId, sourceUrl: revision.creativeAsset.originalMediaUrl, audioSourceResolved: true, cached: true };
+  }
+
+  const content = revision.creativeAsset.sourceContent;
+  const connection = await getActiveMetaConnection();
+  const pages = await getActiveMetaPagesWithTokens(connection.id);
+  const page = pages.find((item) => item.id === content.pageId);
+  if (!page) throw new Error("ไม่พบ Page Access Token สำหรับวิดีโอนี้");
+  const post = await metaRequest<MetaVideoPost>(content.id, { fields: "attachments{target{id},subattachments{target{id}}}" }, { accessToken: page.accessToken });
+  const attachment = post.attachments?.data?.[0];
+  const videoId = attachment?.target?.id ?? attachment?.subattachments?.data?.find((item) => item.target?.id)?.target?.id;
+  if (!videoId) throw new Error("Meta ไม่ส่ง Video Object ID ของโพสต์นี้");
+  const video = await metaRequest<MetaVideoObject>(videoId, { fields: "id,source" }, { accessToken: page.accessToken });
+  if (!video.source) throw new Error("Meta ไม่ส่งไฟล์วิดีโอต้นฉบับที่มี Audio Track");
+
+  const revisionMetadata = parseObject(revision.metadataJson);
+  await prisma.$transaction([
+    prisma.pageContent.update({ where: { id: content.id }, data: { mediaUrl: video.source } }),
+    prisma.creativeAsset.update({ where: { id: revision.creativeAssetId }, data: { originalMediaUrl: video.source, metadataJson: JSON.stringify({ ...assetMetadata, metaVideoId: videoId, metaVideoSourceResolved: true, metaVideoSourceResolvedAt: new Date().toISOString() }) } }),
+    prisma.creativeRevision.update({ where: { id: revision.id }, data: { mediaUrl: video.source, metadataJson: JSON.stringify({ ...revisionMetadata, metaVideoId: videoId, metaVideoSourceResolved: true, metaVideoSourceResolvedAt: new Date().toISOString() }) } }),
+    prisma.decisionLog.create({ data: {
+      contentId: content.id, decisionType: "VIDEO_EDITING_LIBRARY", action: "RESOLVE_META_VIDEO_SOURCE_WITH_AUDIO_V1",
+      reason: "เปลี่ยนจาก DASH video-only เป็น Meta Video Object source สำหรับพรีวิวและ Render พร้อมเสียง",
+      confidence: 100, inputJson: JSON.stringify({ creativeRevisionId, contentId: content.id, pageId: content.pageId, videoId }),
+      outputJson: JSON.stringify({ audioSourceResolved: true }),
+      policyJson: JSON.stringify({ ownedMetaPageOnly: true, campaignPublished: false, realSpendUsed: false, budgetChanged: false }),
+      policyReference: "Master Spec 58",
+    } }),
+  ]);
+  return { creativeRevisionId, sourceUrl: video.source, audioSourceResolved: true, cached: false };
 }
 
 export async function listVideoEditingCandidates() {

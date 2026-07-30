@@ -18,6 +18,7 @@ export default function VideoEditingWorkspace() {
   const [plan, setPlan] = useState<EditPlan | null>(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const response = await fetch("/api/media-buyer/video-editing-engine", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "SYNC_LIBRARY" }) });
@@ -25,7 +26,7 @@ export default function VideoEditingWorkspace() {
     if (!response.ok) throw new Error(data.error ?? "โหลดรายการวิดีโอไม่สำเร็จ");
     const nextCandidates = data.candidates ?? [];
     setCandidates(nextCandidates);
-    setCreativeRevisionId((current) => current || nextCandidates[0]?.id || "");
+    setCreativeRevisionId((current) => nextCandidates.some((candidate) => candidate.id === current) ? current : "");
   }, []);
   useEffect(() => {
     // Initial synchronization with the server-side video candidate inventory.
@@ -44,6 +45,18 @@ export default function VideoEditingWorkspace() {
     } catch (error) { setMessage(error instanceof Error ? error.message : "สร้างแผนตัดต่อไม่สำเร็จ"); } finally { setBusy(false); }
   }
 
+  async function selectVideo(candidate: Candidate) {
+    setCreativeRevisionId(candidate.id); setPlan(null); setResolvingId(candidate.id); setMessage("กำลังโหลดวิดีโอต้นฉบับพร้อมเสียงจาก Meta...");
+    try {
+      const response = await fetch("/api/media-buyer/video-editing-engine", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "RESOLVE_AUDIO_SOURCE", creativeRevisionId: candidate.id }) });
+      const data = await response.json() as { sourceUrl?: string; audioSourceResolved?: boolean; error?: string };
+      if (!response.ok || !data.sourceUrl || !data.audioSourceResolved) throw new Error(data.error ?? "โหลด Audio Track ไม่สำเร็จ");
+      setCandidates((current) => current.map((item) => item.id === candidate.id ? { ...item, sourceUrl: data.sourceUrl ?? item.sourceUrl } : item));
+      setMessage("โหลดวิดีโอต้นฉบับพร้อมเสียงแล้ว กด Play และเปิดเสียงได้");
+    } catch (error) { setMessage(error instanceof Error ? error.message : "โหลดวิดีโอพร้อมเสียงไม่สำเร็จ"); }
+    finally { setResolvingId(null); }
+  }
+
   const selected = candidates.find((candidate) => candidate.id === creativeRevisionId);
   return <div className="space-y-6">
     <section className="rounded-3xl bg-slate-950 p-6 text-white shadow-xl">
@@ -57,15 +70,15 @@ export default function VideoEditingWorkspace() {
         <div className="grid max-h-[72vh] grid-cols-2 gap-3 overflow-y-auto pr-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
           {candidates.map((candidate) => {
             const isSelected = candidate.id === creativeRevisionId;
-            return <button key={candidate.id} type="button" aria-pressed={isSelected} aria-label={`เลือกวิดีโอ ${candidate.pageName} ${candidate.productCategory}`} onClick={() => { setCreativeRevisionId(candidate.id); setPlan(null); }} className={`group relative overflow-hidden rounded-2xl border-4 text-left shadow-sm transition focus:outline-none focus:ring-4 focus:ring-cyan-200 ${isSelected ? "border-cyan-500 shadow-cyan-200" : "border-transparent hover:border-cyan-200"}`}>
+            return <button key={candidate.id} type="button" aria-pressed={isSelected} aria-label={`เลือกวิดีโอ ${candidate.pageName} ${candidate.productCategory}`} onClick={() => void selectVideo(candidate)} className={`group relative overflow-hidden rounded-2xl border-4 text-left shadow-sm transition focus:outline-none focus:ring-4 focus:ring-cyan-200 ${isSelected ? "border-cyan-500 shadow-cyan-200" : "border-transparent hover:border-cyan-200"}`}>
               <div className="aspect-[9/16] bg-slate-900">{candidate.thumbnailUrl ? <img loading="lazy" src={candidate.thumbnailUrl} alt="" className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-slate-400"><Film size={34} /></div>}</div>
               <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/75 to-transparent p-3 pt-10 text-white"><p className="line-clamp-2 text-xs font-semibold">{candidate.pageName}</p><p className="mt-1 text-[11px] text-cyan-200">{candidate.productCategory}</p>{candidate.hasEditPlan && <span className="mt-1 inline-block rounded-full bg-violet-500/90 px-2 py-0.5 text-[10px]">มีแผนแล้ว</span>}</div>
-              {isSelected && <span className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-cyan-500 text-white shadow-lg"><Check size={20} strokeWidth={3} /></span>}
+              {isSelected && <span className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-cyan-500 text-white shadow-lg">{resolvingId === candidate.id ? <RefreshCw size={18} className="animate-spin" /> : <Check size={20} strokeWidth={3} />}</span>}
             </button>;
           })}
         </div>
       </div>
-      {selected?.sourceUrl && <div className="mb-6 rounded-3xl bg-slate-950 p-4 text-white"><div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div><p className="font-semibold">{selected.pageName}</p><p className="text-sm text-slate-400">{selected.productCategory} · {selected.contentId}</p></div><p className="flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-sm"><Volume2 size={17} />เปิดเสียงได้จากปุ่มลำโพงใน Player</p></div><video key={selected.id} className="mx-auto aspect-[9/16] max-h-[72vh] w-auto max-w-full rounded-2xl bg-black object-contain" controls playsInline preload="metadata" poster={selected.thumbnailUrl ?? undefined} src={selected.sourceUrl} /></div>}
+      {selected?.sourceUrl && <div className="mb-6 rounded-3xl bg-slate-950 p-4 text-white"><div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div><p className="font-semibold">{selected.pageName}</p><p className="text-sm text-slate-400">{selected.productCategory} · {selected.contentId}</p></div><p className="flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-sm"><Volume2 size={17} />{resolvingId === selected.id ? "กำลังโหลดเสียงจาก Meta" : "กด Play แล้วเปิดเสียงจากปุ่มลำโพง"}</p></div><video key={`${selected.id}-${selected.sourceUrl}`} className="mx-auto aspect-[9/16] max-h-[72vh] w-auto max-w-full rounded-2xl bg-black object-contain" controls playsInline preload="metadata" poster={selected.thumbnailUrl ?? undefined} src={selected.sourceUrl} /></div>}
       <div className="grid gap-4 md:grid-cols-2">
         <label className="text-sm font-medium text-slate-700">Placement<select value={placement} onChange={(event) => setPlacement(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2"><option value="REELS">Reels 9:16</option><option value="STORIES">Stories 9:16</option><option value="FEED">Feed 4:5</option><option value="IN_STREAM">In-stream 16:9</option></select></label>
         <label className="text-sm font-medium text-slate-700">ความยาวเป้าหมาย (วินาที)<input type="number" min={6} max={60} value={durationSeconds} onChange={(event) => setDurationSeconds(Number(event.target.value))} className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
