@@ -1014,8 +1014,12 @@ export class MetaMarketingApiAdapter {
         ),
 
       name:
-        input.headline ??
-        undefined,
+        input.headline
+          ? normalizeMetaObjectName(
+              input.headline,
+              "creative.headline",
+            )
+          : undefined,
 
       description:
         input.description ??
