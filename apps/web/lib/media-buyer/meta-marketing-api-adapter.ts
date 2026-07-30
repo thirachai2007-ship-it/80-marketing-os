@@ -6,6 +6,7 @@ export const META_MARKETING_API_ADAPTER_VERSION =
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_RETRIES = 3;
 const MAX_RESPONSE_TEXT_LENGTH = 4_000;
+const META_NAME_MAX_BYTES = 255;
 
 export type MetaAdapterMode =
   | "READ_ONLY"
@@ -194,6 +195,25 @@ function ensureNonEmpty(
   }
 
   return normalized;
+}
+
+function normalizeMetaObjectName(value: string, fieldName: string): string {
+  const normalized = ensureNonEmpty(value, fieldName);
+  if (Buffer.byteLength(normalized, "utf8") <= META_NAME_MAX_BYTES) {
+    return normalized;
+  }
+
+  let result = "";
+  for (const character of normalized) {
+    if (
+      Buffer.byteLength(result + character, "utf8") >
+      META_NAME_MAX_BYTES
+    ) {
+      break;
+    }
+    result += character;
+  }
+  return result.trimEnd();
 }
 
 function safeJsonStringify(
@@ -816,7 +836,7 @@ export class MetaMarketingApiAdapter {
 
       body: {
         name:
-          ensureNonEmpty(
+          normalizeMetaObjectName(
             input.name,
             "campaign.name",
           ),
@@ -875,7 +895,7 @@ export class MetaMarketingApiAdapter {
           ),
 
         name:
-          ensureNonEmpty(
+          normalizeMetaObjectName(
             input.name,
             "adSet.name",
           ),
@@ -967,7 +987,7 @@ export class MetaMarketingApiAdapter {
         method: "POST",
         path: `/act_${adAccountId}/adcreatives`,
         body: {
-          name: ensureNonEmpty(
+          name: normalizeMetaObjectName(
             input.name,
             "creative.name",
           ),
@@ -1034,7 +1054,7 @@ export class MetaMarketingApiAdapter {
 
       body: {
         name:
-          ensureNonEmpty(
+          normalizeMetaObjectName(
             input.name,
             "creative.name",
           ),
@@ -1074,7 +1094,7 @@ export class MetaMarketingApiAdapter {
 
       body: {
         name:
-          ensureNonEmpty(
+          normalizeMetaObjectName(
             input.name,
             "ad.name",
           ),
