@@ -14,6 +14,7 @@ import {
   Sparkles,
   Film,
   ListChecks,
+  ChartNoAxesCombined,
 } from "lucide-react";
 
 type MenuItem = {
@@ -45,6 +46,11 @@ const menuGroups: MenuGroup[] = [
   {
     title: "OPERATIONS",
     items: [
+      {
+        title: "Daily Overview",
+        href: "/marketing/daily-overview",
+        icon: ChartNoAxesCombined,
+      },
       {
         title: "Media Buyer Queue",
         href: "/marketing/media-buyer-queue",
