@@ -70,6 +70,7 @@ export type MetaPublishOrchestratorOptions = {
 
   targeting: Record<string, unknown>;
   promotedObject?: Record<string, unknown>;
+  /** @deprecated Existing posts are forbidden; every ad is a Dark Post. */
   reuseExistingPost?: boolean;
 
   ownerName?: string;
@@ -1432,21 +1433,24 @@ export async function orchestrateMetaPublish(
             destinationUrl,
 
             imageUrl:
-              ad.mediaUrl,
+              ad.mimeType
+                ?.toLowerCase()
+                .startsWith("video/")
+                ? null
+                : ad.mediaUrl,
 
             videoId:
               null,
 
+            videoUrl:
+              ad.mimeType
+                ?.toLowerCase()
+                .startsWith("video/")
+                ? ad.mediaUrl
+                : null,
+
             objectStoryId:
-              options.reuseExistingPost === false
-                ? null
-                : draft.ads.find(
-                    (draftAd) =>
-                      draftAd.id ===
-                      ad.campaignDraftAdId,
-                  )?.content
-                    ?.objectStoryId ??
-                  null,
+              null,
           },
 
           ad: {

@@ -117,6 +117,7 @@ export type MetaCreativeCreateInput = {
   callToActionType: string;
   destinationUrl: string;
   imageUrl?: string | null;
+  videoUrl?: string | null;
   videoId?: string | null;
   objectStoryId?: string | null;
 };
@@ -967,34 +968,63 @@ export class MetaMarketingApiAdapter {
       );
 
     if (input.objectStoryId) {
-      const objectStoryId =
-        ensureNonEmpty(
-          input.objectStoryId,
-          "creative.objectStoryId",
-        );
+      throw new Error(
+        "Dark Post policy forbids object_story_id; every ad creative must be unpublished",
+      );
+    }
 
-      if (
-        !objectStoryId.startsWith(
-          `${input.pageId}_`,
-        )
-      ) {
-        throw new Error(
-          "Existing post does not belong to the mapped Facebook Page",
-        );
-      }
-
+    if (input.videoId) {
       return this.request<{
         id: string;
       }>({
         method: "POST",
         path: `/act_${adAccountId}/adcreatives`,
         body: {
-          name: normalizeMetaObjectName(
-            input.name,
-            "creative.name",
-          ),
-          object_story_id:
-            objectStoryId,
+          name:
+            normalizeMetaObjectName(
+              input.name,
+              "creative.name",
+            ),
+          object_story_spec:
+            safeJsonStringify({
+              page_id:
+                ensureNonEmpty(
+                  input.pageId,
+                  "creative.pageId",
+                ),
+              video_data: {
+                video_id:
+                  ensureNonEmpty(
+                    input.videoId,
+                    "creative.videoId",
+                  ),
+                message:
+                  ensureNonEmpty(
+                    input.primaryText,
+                    "creative.primaryText",
+                  ),
+                title:
+                  input.headline
+                    ? normalizeMetaObjectName(
+                        input.headline,
+                        "creative.headline",
+                      )
+                    : undefined,
+                link_description:
+                  input.description ??
+                  undefined,
+                call_to_action: {
+                  type:
+                    normalizeMetaCallToAction(
+                      input.callToActionType,
+                    ),
+                  value: {
+                    link:
+                      input.destinationUrl,
+                  },
+                },
+              },
+            }),
         },
       });
     }
@@ -1076,6 +1106,36 @@ export class MetaMarketingApiAdapter {
             link_data:
               linkData,
           }),
+      },
+    });
+  }
+
+  async uploadVideo(input: {
+    adAccountId: string;
+    name: string;
+    videoUrl: string;
+  }): Promise<{ id: string }> {
+    const adAccountId =
+      this.assertWriteAllowed(
+        input.adAccountId,
+      );
+
+    return this.request<{
+      id: string;
+    }>({
+      method: "POST",
+      path: `/act_${adAccountId}/advideos`,
+      body: {
+        title:
+          normalizeMetaObjectName(
+            input.name,
+            "video.title",
+          ),
+        file_url:
+          ensureNonEmpty(
+            input.videoUrl,
+            "video.videoUrl",
+          ),
       },
     });
   }
@@ -1222,12 +1282,40 @@ export class MetaMarketingApiAdapter {
         const item of
           input.ads
       ) {
+        let videoId =
+          item.creative.videoId ??
+          null;
+
+        if (
+          !videoId &&
+          item.creative.videoUrl
+        ) {
+          const video =
+            await this.uploadVideo({
+              adAccountId:
+                expectedAccountId,
+              name:
+                `${item.creative.name} | VIDEO`,
+              videoUrl:
+                item.creative.videoUrl,
+            });
+
+          videoId =
+            video.id;
+
+          createdIds.push(
+            video.id,
+          );
+        }
+
         const creative =
           await this.createCreative({
             ...item.creative,
 
             adAccountId:
               expectedAccountId,
+
+            videoId,
           });
 
         createdIds.push(
