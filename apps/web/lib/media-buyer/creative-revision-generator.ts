@@ -1,7 +1,7 @@
 import prisma from "@/lib/prisma";
 
 export const CREATIVE_REVISION_GENERATOR_VERSION =
-  "creative-revision-generator-v1";
+  "creative-revision-generator-v2";
 
 const DEFAULT_VARIANT_COUNT = 3;
 const MAXIMUM_VARIANT_COUNT = 3;
@@ -1076,7 +1076,7 @@ export async function generateCreativeRevisionVariants(
               }),
 
             policyReference:
-              "Master Spec 26, 31, 41-46, 56-60, 65-69, 71-72",
+              "Master Spec 26, 31, 41-46, 56-60, 65-69, 71-72, 57",
           },
         });
 
@@ -1085,6 +1085,7 @@ export async function generateCreativeRevisionVariants(
           createdVersions,
         };
       },
+      { timeout: 15_000 },
     );
 
   return {
