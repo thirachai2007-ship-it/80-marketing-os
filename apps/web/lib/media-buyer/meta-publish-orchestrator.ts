@@ -1,9 +1,11 @@
 import { createHash } from "node:crypto";
 
 import prisma from "@/lib/prisma";
+import { getActiveMetaConnection } from "@/lib/meta/connection-token";
 import { AUTONOMOUS_PAUSED_ACTION } from "@/lib/media-buyer/autonomous-paused-authorization";
 
 import {
+  loadMetaAdapterConfig,
   MetaMarketingApiAdapter,
 } from "@/lib/media-buyer/meta-marketing-api-adapter";
 import type {
@@ -1452,8 +1454,16 @@ export async function orchestrateMetaPublish(
       ),
   };
 
+  const connection =
+    await getActiveMetaConnection();
+
   const adapter =
-    new MetaMarketingApiAdapter();
+    new MetaMarketingApiAdapter(
+      loadMetaAdapterConfig({
+        accessToken:
+          connection.accessToken,
+      }),
+    );
 
   const metaResult =
     await adapter
