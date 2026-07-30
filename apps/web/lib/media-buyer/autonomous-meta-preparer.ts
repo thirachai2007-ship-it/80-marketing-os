@@ -5,7 +5,7 @@ import { executeMetaPublishPlan } from "@/lib/media-buyer/meta-publish-executor"
 import { orchestrateMetaPublish } from "@/lib/media-buyer/meta-publish-orchestrator";
 
 export const AUTONOMOUS_META_PREPARER_VERSION =
-  "autonomous-meta-preparer-v1";
+  "autonomous-meta-preparer-v1.1";
 
 const DEFAULT_BATCH_SIZE = 2;
 const MAX_BATCH_SIZE = 5;
@@ -199,12 +199,47 @@ export async function runAutonomousMetaPreparationBatch(
     try {
       results.push(await prepareCampaignInMetaPaused(draft.id));
     } catch (error) {
+      const reason =
+        error instanceof Error ? error.message : "Unknown autonomous Meta error";
+
+      await prisma.decisionLog.create({
+        data: {
+          campaignDraftId: draft.id,
+          decisionType: "AUTONOMOUS_META_PREPARATION",
+          action: "AUTONOMOUS_META_PREPARATION_FAILED_V1",
+          reason,
+          confidence: 100,
+          inputJson: JSON.stringify({
+            preparerVersion: AUTONOMOUS_META_PREPARER_VERSION,
+            campaignDraftId: draft.id,
+            requestedMode: "CREATE_PAUSED_ONLY",
+          }),
+          outputJson: JSON.stringify({
+            status: "FAILED",
+            stage: "UNHANDLED",
+            error: reason,
+            metaMutationCompleted: false,
+            campaignActivated: false,
+            realSpendUsed: false,
+            budgetChanged: false,
+            scheduleChanged: false,
+          }),
+          policyJson: JSON.stringify({
+            allMetaObjectsMustBePaused: true,
+            activationForbidden: true,
+            spendForbidden: true,
+            budgetMutationForbidden: true,
+            scheduleMutationForbidden: true,
+          }),
+          policyReference: "Master Spec 74, 77",
+        },
+      });
+
       results.push({
         status: "FAILED",
         campaignDraftId: draft.id,
         stage: "UNHANDLED",
-        reason:
-          error instanceof Error ? error.message : "Unknown autonomous Meta error",
+        reason,
       });
     }
   }
