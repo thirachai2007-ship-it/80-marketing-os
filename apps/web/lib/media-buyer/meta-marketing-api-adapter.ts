@@ -94,6 +94,7 @@ export type MetaAdSetCreateInput = {
   dailyBudgetMinorUnits: number;
   billingEvent: string;
   optimizationGoal: string;
+  destinationType?: string | null;
   targeting: Record<string, unknown>;
   promotedObject?: Record<string, unknown>;
   bidStrategy?: string;
@@ -896,6 +897,10 @@ export class MetaMarketingApiAdapter {
             input.optimizationGoal,
             "adSet.optimizationGoal",
           ),
+
+        destination_type:
+          input.destinationType ??
+          undefined,
 
         bid_strategy:
           input.bidStrategy,

@@ -48,6 +48,9 @@ export async function prepareCampaignInMetaPaused(
   const payload = await buildMetaPublishPayload({
     campaignDraftId,
     forceRebuild: true,
+    campaignObjectiveOverride: "OUTCOME_ENGAGEMENT",
+    optimizationGoalOverride: "CONVERSATIONS",
+    destinationTypeOverride: "MESSENGER",
   });
 
   if (

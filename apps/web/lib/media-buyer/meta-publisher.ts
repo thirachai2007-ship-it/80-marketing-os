@@ -15,6 +15,9 @@ type MetaPublisherStatus =
 export type MetaPublisherOptions = {
   campaignDraftId: string;
   forceRebuild?: boolean;
+  campaignObjectiveOverride?: string;
+  optimizationGoalOverride?: string;
+  destinationTypeOverride?: string;
 };
 
 export type MetaCampaignPayload = {
@@ -30,6 +33,7 @@ export type MetaCampaignPayload = {
     dailyBudgetSatang: number;
     billingEvent: string;
     optimizationGoal: string;
+    destinationType: string | null;
     bidStrategy: string;
     bidAmountSatang: number | null;
     startTime: string | null;
@@ -471,6 +475,7 @@ export async function buildMetaPublishPayload(
     "LOWEST_COST_WITHOUT_CAP";
 
   const optimizationGoal =
+    options.optimizationGoalOverride ??
     readNestedString(
       bidOutput,
       [
@@ -745,6 +750,7 @@ export async function buildMetaPublishPayload(
         draft.campaignName,
 
       objective:
+        options.campaignObjectiveOverride ??
         draft.objective,
 
       status:
@@ -764,6 +770,10 @@ export async function buildMetaPublishPayload(
       billingEvent,
 
       optimizationGoal,
+
+      destinationType:
+        options.destinationTypeOverride ??
+        null,
 
       bidStrategy,
 
