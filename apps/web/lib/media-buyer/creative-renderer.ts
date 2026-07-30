@@ -653,6 +653,15 @@ async function writeDecisionLog(input: {
 
       policyJson:
         safeStringify({
+          netProfitFirst:
+            true,
+
+          primaryObjective:
+            "MAXIMIZE_NET_PROFIT",
+
+          productAndBrandIdentityRequired:
+            true,
+
           optimizeFirst: true,
 
           preserveOriginal:
