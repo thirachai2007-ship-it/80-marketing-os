@@ -545,6 +545,11 @@ export async function orchestrateMetaPublish(
             status: true,
             metaCreativeId: true,
             metaAdId: true,
+            content: {
+              select: {
+                objectStoryId: true,
+              },
+            },
           },
         },
 
@@ -1416,6 +1421,15 @@ export async function orchestrateMetaPublish(
               ad.mediaUrl,
 
             videoId:
+              null,
+
+            objectStoryId:
+              draft.ads.find(
+                (draftAd) =>
+                  draftAd.id ===
+                  ad.campaignDraftAdId,
+              )?.content
+                ?.objectStoryId ??
               null,
           },
 
