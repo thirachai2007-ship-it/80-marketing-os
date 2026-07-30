@@ -1,6 +1,6 @@
 import AppShell from "@/components/layout/AppShell";
-import VideoEditingWorkspace from "@/components/marketing/VideoEditingWorkspace";
+import Link from "next/link";
 
 export default function VideoEditingPage() {
-  return <AppShell><VideoEditingWorkspace /></AppShell>;
+  return <AppShell><div className="space-y-6"><section className="rounded-3xl bg-slate-950 p-7 text-white shadow-xl"><p className="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-400">Owner Override</p><h1 className="mt-2 text-2xl font-bold">เลือกโพสต์ต้นฉบับไปยิงแอด</h1><p className="mt-3 max-w-3xl text-slate-300">AI จะเลือกโพสต์ภาพนิ่งหรือวิดีโอที่มีอยู่แล้วจากทุกเพจ โดยไม่ตัดต่อคลิป ไม่ใส่ Hook หรือ CTA ทับสื่อ และไม่สร้าง Video Revision</p></section><section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6"><h2 className="text-lg font-bold text-emerald-950">นโยบายที่ใช้งานอยู่</h2><ul className="mt-3 space-y-2 text-sm text-emerald-900"><li>✓ ใช้ภาพหรือวิดีโอจากโพสต์ต้นฉบับ</li><li>✓ AI วิเคราะห์และจัดอันดับโพสต์ที่เหมาะยิงแอด</li><li>✓ ทีมงานของคุณเป็นผู้ตัดต่อและผลิตคลิปใหม่</li><li>✓ AI ไม่แก้ไขไฟล์สื่อและไม่ส่งงานตัดต่อมารออนุมัติ</li></ul><div className="mt-5 flex flex-wrap gap-3"><Link href="/marketing/content-intelligence/results" className="rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white">ดูผลวิเคราะห์โพสต์</Link><Link href="/marketing/media-buyer-queue" className="rounded-xl border border-emerald-300 bg-white px-4 py-2.5 text-sm font-semibold text-emerald-800">ดูโพสต์ที่ AI เลือก</Link></div></section></div></AppShell>;
 }

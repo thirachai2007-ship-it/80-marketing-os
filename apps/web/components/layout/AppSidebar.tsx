@@ -68,7 +68,7 @@ const menuGroups: MenuGroup[] = [
         icon: BrainCircuit,
       },
       {
-        title: "Video Editing",
+        title: "Ad Post Selection",
         href: "/marketing/video-editing",
         icon: Film,
       },
