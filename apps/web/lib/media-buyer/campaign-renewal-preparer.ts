@@ -15,11 +15,17 @@ function parseSourceCampaignId(inputJson: string | null) {
 
 function productCategory(name: string) {
   const value = name.normalize("NFKC").toLowerCase();
-  if (value.includes("sticker") || value.includes("สติกเกอร์")) return "STICKER";
+  if (value.includes("sticker") || value.includes("สติกเกอร์") || value.includes("ttn") || value.includes("2day") || value.includes("pvc") || value.includes("สูญญากาศ") || value.includes("สะท้อนแสง")) return "STICKER";
   if (value.includes("dtf")) return "COTTON_DTF";
   if (value.includes("dtg")) return "DTG";
   if (value.includes("apron") || value.includes("ผ้ากันเปื้อน")) return "APRON";
   return "PRINTED_SHIRT";
+}
+
+function preferredPage(campaignName: string, pages: Array<{ id: string; name: string; forecastDailyBudgetSatang: number }>) {
+  const campaign = campaignName.normalize("NFKC").toLowerCase();
+  const token = campaign.includes("ttn") ? "ttn" : campaign.includes("2day") ? "sticker2day" : null;
+  return (token ? pages.find((page) => page.name.normalize("NFKC").toLowerCase().includes(token)) : null) ?? pages[0];
 }
 
 function budgetSatang(value: string | null, fallback: number) {
@@ -51,11 +57,12 @@ export async function runCampaignRenewalPreparation() {
         continue;
       }
       const category = productCategory(campaign.name);
-      const page = await prisma.managedPage.findFirst({
+      const compatiblePages = await prisma.managedPage.findMany({
         where: { isActive: true, OR: [{ adAccountId: campaign.adAccountId }, { adAccountMappings: { some: { adAccountId: campaign.adAccountId, status: "ACTIVE" } } }], productPolicies: { some: { productCategory: category, isEnabled: true, allocationPercent: { gt: 0 } } } },
         orderBy: { updatedAt: "desc" },
         select: { id: true, name: true, forecastDailyBudgetSatang: true },
       });
+      const page = preferredPage(campaign.name, compatiblePages);
       if (!page) {
         results.push({ sourceCampaignId: campaign.id, status: "NEED_REVIEW", reason: "NO_ACTIVE_PAGE_ACCOUNT_MAPPING" });
         continue;
