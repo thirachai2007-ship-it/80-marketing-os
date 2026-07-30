@@ -50,8 +50,9 @@ export async function runCampaignRenewalPreparation() {
         results.push({ sourceCampaignId: campaign.id, status: "EXISTING", campaignDraftId: existingDraftId });
         continue;
       }
+      const category = productCategory(campaign.name);
       const page = await prisma.managedPage.findFirst({
-        where: { isActive: true, OR: [{ adAccountId: campaign.adAccountId }, { adAccountMappings: { some: { adAccountId: campaign.adAccountId, status: "ACTIVE" } } }] },
+        where: { isActive: true, OR: [{ adAccountId: campaign.adAccountId }, { adAccountMappings: { some: { adAccountId: campaign.adAccountId, status: "ACTIVE" } } }], productPolicies: { some: { productCategory: category, isEnabled: true, allocationPercent: { gt: 0 } } } },
         orderBy: { updatedAt: "desc" },
         select: { id: true, name: true, forecastDailyBudgetSatang: true },
       });
@@ -59,7 +60,6 @@ export async function runCampaignRenewalPreparation() {
         results.push({ sourceCampaignId: campaign.id, status: "NEED_REVIEW", reason: "NO_ACTIVE_PAGE_ACCOUNT_MAPPING" });
         continue;
       }
-      const category = productCategory(campaign.name);
       const dailyBudget = budgetSatang(campaign.dailyBudgetMinorUnits, page.forecastDailyBudgetSatang);
       const draft = await prisma.$transaction(async (tx) => {
         const created = await tx.campaignDraft.create({
