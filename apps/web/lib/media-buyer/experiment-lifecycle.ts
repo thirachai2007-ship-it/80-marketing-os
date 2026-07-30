@@ -2,7 +2,8 @@ import { createHash } from "node:crypto";
 
 import prisma from "@/lib/prisma";
 
-export const EXPERIMENT_LIFECYCLE_VERSION = "experiment-lifecycle-v1";
+export const EXPERIMENT_LIFECYCLE_VERSION = "experiment-lifecycle-v2";
+const PAUSED_CANARY_REVISION_STATUSES = ["READY_TO_RENDER", "READY_FOR_APPROVAL"] as const;
 export type ExperimentStatus = "PAUSED" | "READY_FOR_ACTIVATION" | "CANCELLED";
 export type OwnerOverrideAction = "PAUSE" | "APPROVE_FOR_LATER_ACTIVATION" | "CANCEL";
 
@@ -43,10 +44,15 @@ export async function createPausedCanary(input: {
   if (input.controlCreativeRevisionId === input.challengerCreativeRevisionId) throw new Error("Control และ Challenger ต้องเป็นคนละ Revision");
 
   const revisions = await prisma.creativeRevision.findMany({
-    where: { id: { in: [input.controlCreativeRevisionId, input.challengerCreativeRevisionId] }, status: "READY_FOR_APPROVAL" },
+    where: {
+      id: { in: [input.controlCreativeRevisionId, input.challengerCreativeRevisionId] },
+      status: { in: [...PAUSED_CANARY_REVISION_STATUSES] },
+    },
     select: { id: true, creativeAsset: { select: { pageId: true } } },
   });
-  if (revisions.length !== 2) throw new Error("Revision ทั้งสองรายการต้องอยู่ในสถานะ READY_FOR_APPROVAL");
+  if (revisions.length !== 2) {
+    throw new Error("Revision ทั้งสองรายการต้องอยู่ในสถานะ READY_TO_RENDER หรือ READY_FOR_APPROVAL");
+  }
   if (revisions.some((revision) => revision.creativeAsset.pageId !== draft.pageId)) {
     throw new Error("Control และ Challenger ต้องเป็น Creative ของเพจเดียวกับ Campaign Draft");
   }
@@ -98,7 +104,10 @@ export async function getExperimentOptions() {
       },
     }),
     prisma.creativeRevision.findMany({
-      where: { status: "READY_FOR_APPROVAL", creativeAsset: { isActive: true } },
+      where: {
+        status: { in: [...PAUSED_CANARY_REVISION_STATUSES] },
+        creativeAsset: { isActive: true },
+      },
       orderBy: { updatedAt: "desc" },
       take: 200,
       select: {
