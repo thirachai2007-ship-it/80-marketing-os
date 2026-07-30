@@ -294,7 +294,10 @@ function retryDelayMs(
   );
 }
 
-export function loadMetaAdapterConfig(options?: { accessToken?: string }):
+export function loadMetaAdapterConfig(options?: {
+  accessToken?: string;
+  additionalAllowedAdAccountIds?: string[];
+}):
   MetaAdapterConfig {
   const graphApiVersion =
     ensureNonEmpty(
@@ -331,15 +334,16 @@ export function loadMetaAdapterConfig(options?: { accessToken?: string }):
     );
   }
 
-  const allowedAdAccountIds =
-    (
-      process.env
-        .META_ALLOWED_AD_ACCOUNT_IDS ??
-      ""
-    )
-      .split(",")
-      .map(normalizeAccountId)
-      .filter(Boolean);
+  const allowedAdAccountIds = [
+    ...new Set([
+      ...(
+        process.env
+          .META_ALLOWED_AD_ACCOUNT_IDS ??
+        ""
+      ).split(","),
+      ...(options?.additionalAllowedAdAccountIds ?? []),
+    ].map(normalizeAccountId).filter(Boolean)),
+  ];
 
   return {
     graphApiVersion,

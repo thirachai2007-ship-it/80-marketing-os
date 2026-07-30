@@ -1462,6 +1462,9 @@ export async function orchestrateMetaPublish(
       loadMetaAdapterConfig({
         accessToken:
           connection.accessToken,
+        additionalAllowedAdAccountIds: [
+          adAccountId,
+        ],
       }),
     );
 
