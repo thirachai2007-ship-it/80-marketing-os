@@ -53,14 +53,21 @@ export async function GET(request: NextRequest) {
       width: true,
       height: true,
       thumbnailUrl: true,
+      mediaUrl: true,
+      durationMs: true,
       aiReason: true,
       editInstructions: true,
+      primaryText: true,
+      headline: true,
+      description: true,
+      callToAction: true,
       metadataJson: true,
       updatedAt: true,
       creativeAsset: {
         select: {
           name: true,
           productCategory: true,
+          mediaType: true,
           originalMediaUrl: true,
           originalThumbnailUrl: true,
           page: { select: { name: true } },
@@ -75,21 +82,35 @@ export async function GET(request: NextRequest) {
       let metadata: Record<string, unknown> = {};
       try { metadata = JSON.parse(revision.metadataJson ?? "{}") as Record<string, unknown>; } catch {}
       return isApprovalMetadataValid(metadata, revision.creativeAsset.productCategory);
-    }).map((revision) => ({
+    }).map((revision) => {
+      let editPlan: Record<string, unknown> | null = null;
+      try { editPlan = revision.editInstructions ? JSON.parse(revision.editInstructions) as Record<string, unknown> : null; } catch {}
+      const isVideo = revision.creativeAsset.mediaType.toUpperCase().includes("VIDEO");
+      return ({
       id: revision.id,
       version: revision.version,
       revisionType: revision.revisionType,
       aspectRatio: revision.aspectRatio,
       width: revision.width,
       height: revision.height,
-      previewUrl: revision.thumbnailUrl ?? revision.creativeAsset.originalThumbnailUrl ?? revision.creativeAsset.originalMediaUrl,
+      mediaType: isVideo ? "VIDEO" : "IMAGE",
+      previewUrl: isVideo
+        ? revision.mediaUrl ?? revision.creativeAsset.originalMediaUrl
+        : revision.mediaUrl ?? revision.thumbnailUrl ?? revision.creativeAsset.originalThumbnailUrl ?? revision.creativeAsset.originalMediaUrl,
+      posterUrl: revision.thumbnailUrl ?? revision.creativeAsset.originalThumbnailUrl,
+      durationMs: revision.durationMs,
       aiReason: revision.aiReason,
       editInstructions: revision.editInstructions,
+      editPlan,
+      primaryText: revision.primaryText,
+      headline: revision.headline,
+      description: revision.description,
+      callToAction: revision.callToAction,
       assetName: revision.creativeAsset.name,
       pageName: revision.creativeAsset.page.name,
       productCategory: revision.creativeAsset.productCategory,
       fingerprint: fingerprint(revision),
-    })),
+    }); }),
     safety: {
       approvalDoesNotExecutePaidRender: true,
       campaignPublished: false,
