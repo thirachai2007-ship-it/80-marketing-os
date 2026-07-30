@@ -9,7 +9,7 @@ import { resolveFallbackCreativeMode } from "@/lib/media-buyer/content-fallback-
 import prisma from "@/lib/prisma";
 
 export const CAMPAIGN_BUILDER_VERSION =
-  "campaign-builder-v2";
+  "campaign-builder-v2.1-paused-canary";
 
 const DEFAULT_ALLOCATIONS: Record<
   CandidateProductCategory,
@@ -1026,9 +1026,11 @@ export async function buildCampaignDraft(
         300,
     });
 
+  // PAUSED canaries may start with one qualified existing post. The configured
+  // minimum remains the target for a full campaign and is retained in audit.
   if (
-    !selectorResult
-      .hasEnoughCandidates
+    selectorResult
+      .selectedCandidateCount === 0
   ) {
     return {
       builderVersion:
@@ -1461,6 +1463,8 @@ export async function buildCampaignDraft(
                   allowDarkPost,
                   useOldWinningContent,
                   allocationPercent,
+                  allowPausedCanaryBelowMinimumAds:
+                    true,
                 },
                 pageForecastDailyBudgetSatang:
                   page.forecastDailyBudgetSatang,
@@ -1478,6 +1482,11 @@ export async function buildCampaignDraft(
                   selectedCandidateCount:
                     selectorResult
                       .selectedCandidateCount,
+                  configuredMinimumAds:
+                    minimumAds,
+                  selectedBelowMinimumForPausedCanary:
+                    selectedCandidates.length <
+                    minimumAds,
                   rejectedCandidateCount:
                     selectorResult
                       .rejectedCandidates
@@ -1513,6 +1522,11 @@ export async function buildCampaignDraft(
                   "PAUSED",
                 ownerApprovalRequired:
                   true,
+                configuredMinimumAds:
+                  minimumAds,
+                selectedBelowMinimumForPausedCanary:
+                  selectedCandidates.length <
+                  minimumAds,
                 campaignPublished:
                   false,
                 realSpendUsed:
@@ -1530,6 +1544,10 @@ export async function buildCampaignDraft(
                   true,
                 initialCampaignStatus:
                   "PAUSED",
+                allowPausedCanaryBelowMinimumAds:
+                  true,
+                configuredMinimumAds:
+                  minimumAds,
                 mappedAdAccountOnly:
                   true,
                 samePageContentOnly:
