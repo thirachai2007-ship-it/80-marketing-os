@@ -113,6 +113,7 @@ export type MetaCreativeCreateInput = {
   destinationUrl: string;
   imageUrl?: string | null;
   videoId?: string | null;
+  objectStoryId?: string | null;
 };
 
 export type MetaAdCreateInput = {
@@ -928,6 +929,39 @@ export class MetaMarketingApiAdapter {
       this.assertWriteAllowed(
         input.adAccountId,
       );
+
+    if (input.objectStoryId) {
+      const objectStoryId =
+        ensureNonEmpty(
+          input.objectStoryId,
+          "creative.objectStoryId",
+        );
+
+      if (
+        !objectStoryId.startsWith(
+          `${input.pageId}_`,
+        )
+      ) {
+        throw new Error(
+          "Existing post does not belong to the mapped Facebook Page",
+        );
+      }
+
+      return this.request<{
+        id: string;
+      }>({
+        method: "POST",
+        path: `/act_${adAccountId}/adcreatives`,
+        body: {
+          name: ensureNonEmpty(
+            input.name,
+            "creative.name",
+          ),
+          object_story_id:
+            objectStoryId,
+        },
+      });
+    }
 
     const linkData:
       Record<string, unknown> = {
