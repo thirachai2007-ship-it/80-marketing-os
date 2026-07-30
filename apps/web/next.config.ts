@@ -20,6 +20,9 @@ const nextConfig: NextConfig = {
     "/api/media-buyer/analysis-batch-orchestrator": [
       "./node_modules/ffmpeg-static/ffmpeg*",
     ],
+    "/api/media-buyer/video-editing-engine": [
+      "./node_modules/ffmpeg-static/ffmpeg*",
+    ],
   },
 };
 
