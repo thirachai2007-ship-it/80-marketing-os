@@ -377,7 +377,7 @@ export async function syncMetaInsights({
   try {
     const params: Record<string, string> = {
       level: "ad",
-      time_increment: "1",
+      time_increment: sweepId ? "all_days" : "1",
       fields: [
         "date_start",
         "date_stop",
@@ -520,6 +520,7 @@ export async function syncMetaInsights({
           spendSatang,
           sweepId: sweepId || null,
           sweepPage: sweepPage || null,
+          inventoryAggregation: sweepId ? "all_days" : null,
         }),
       },
     });
