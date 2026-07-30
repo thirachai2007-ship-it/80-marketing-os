@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import prisma from "@/lib/prisma";
 
 export const PUBLISHING_QUEUE_VERSION =
-  "publishing-queue-v1";
+  "publishing-queue-v1.1-existing-post";
 
 const DEFAULT_BATCH_SIZE = 5;
 const MAX_BATCH_SIZE = 20;
@@ -459,6 +459,26 @@ export async function enqueueCampaignForApproval(
         ),
     );
 
+  const usesOnlyExistingPosts =
+    readyAds.length > 0 &&
+    readyAds.every(
+      (ad) =>
+        Boolean(ad.contentId) &&
+        !ad.creativeRevisionId &&
+        !ad.darkPostCopyId,
+    );
+
+  const requiredDecisionActions =
+    usesOnlyExistingPosts
+      ? REQUIRED_DECISION_ACTIONS.filter(
+          (action) =>
+            action !==
+              "RENDER_CAMPAIGN_CREATIVES_V1" &&
+            action !==
+              "BUILD_DARK_POST_DRAFTS_V1",
+        )
+      : [...REQUIRED_DECISION_ACTIONS];
+
   if (
     readyAds.length !==
     draft.ads.length
@@ -532,7 +552,7 @@ export async function enqueueCampaignForApproval(
   }
 
   const missingPrerequisites =
-    REQUIRED_DECISION_ACTIONS.filter(
+    requiredDecisionActions.filter(
       (action) =>
         !latestDecisionByAction.has(
           action,
@@ -587,7 +607,7 @@ export async function enqueueCampaignForApproval(
   }
 
   const prerequisiteDecisions =
-    REQUIRED_DECISION_ACTIONS.map(
+    requiredDecisionActions.map(
       (action) =>
         latestDecisionByAction.get(
           action,
@@ -682,7 +702,7 @@ export async function enqueueCampaignForApproval(
       draft.forecastDailyBudgetSatang,
 
     prerequisiteActions:
-      [...REQUIRED_DECISION_ACTIONS],
+      [...requiredDecisionActions],
 
     prerequisiteDecisionIds:
       prerequisiteDecisions.map(
@@ -874,7 +894,7 @@ export async function enqueueCampaignForApproval(
                   readyAds.length,
 
                 prerequisiteActions:
-                  REQUIRED_DECISION_ACTIONS,
+                  requiredDecisionActions,
 
                 forceRebuild:
                   options.forceRebuild ??
@@ -939,7 +959,7 @@ export async function enqueueCampaignForApproval(
                   true,
 
                 requiredPrerequisites:
-                  REQUIRED_DECISION_ACTIONS,
+                  requiredDecisionActions,
               }),
 
             policyReference:
