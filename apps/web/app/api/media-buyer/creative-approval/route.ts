@@ -11,9 +11,13 @@ function fingerprint(input: {
   status: string;
   approvalStatus: string;
   sourceFingerprint: string | null;
-  updatedAt: Date;
 }) {
-  return createHash("sha256").update(JSON.stringify(input)).digest("hex");
+  return createHash("sha256").update(JSON.stringify({
+    id: input.id,
+    status: input.status,
+    approvalStatus: input.approvalStatus,
+    sourceFingerprint: input.sourceFingerprint,
+  })).digest("hex");
 }
 
 export async function GET(request: NextRequest) {

@@ -71,7 +71,7 @@ export default function CreativeApprovalPanel() {
     const result = await response.json() as { error?: string };
     setMessage(response.ok ? "บันทึกคำตัดสินแล้ว" : result.error ?? "บันทึกไม่สำเร็จ");
     setWorkingId(null);
-    if (response.ok) await load();
+    if (response.ok || response.status === 409) await load();
   }
 
   return (
