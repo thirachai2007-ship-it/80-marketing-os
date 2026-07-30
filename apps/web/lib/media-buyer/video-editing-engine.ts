@@ -42,6 +42,14 @@ function analyzedProductCategory(rawAnalysisJson: string | null): string {
   return ["COTTON_DTF", "DTG", "PRINTED_SHIRT", "APRON", "STICKER"].includes(category) ? category : "UNKNOWN";
 }
 
+function assetProductCategory(names: string[]): string {
+  for (const name of names) {
+    const category = ["COTTON_DTF", "DTG", "PRINTED_SHIRT", "APRON", "STICKER"].find((item) => name.includes(`| ${item} |`));
+    if (category) return category;
+  }
+  return "UNKNOWN";
+}
+
 export function classifyContentIntent(analysis: IntentEvidence): { contentIntent: ContentIntent; isSalesCandidate: boolean; reason: string } {
   const raw = parseObject(analysis.rawAnalysisJson);
   const explicit = normalizeIntent(raw.contentIntent);
@@ -218,7 +226,7 @@ export async function syncVideoEditingLibrary() {
       id: true, pageId: true, pageName: true, productCategory: true, mediaType: true,
       mediaUrl: true, thumbnailUrl: true, message: true, contentFingerprint: true, fingerprint: true,
       analysis: { select: { id: true, recommendation: true, productVisibilityScore: true, offerClarityScore: true, salesPotentialScore: true, summary: true, visibleTextJson: true, visualObservationsJson: true, contextObservationsJson: true, rawAnalysisJson: true } },
-      creativeAssets: { where: { isActive: true }, select: { id: true }, take: 1 },
+      creativeAssets: { where: { isActive: true }, select: { id: true, name: true }, take: 1 },
     },
   });
   let correctedNonSalesClassifications = 0;
@@ -227,12 +235,13 @@ export async function syncVideoEditingLibrary() {
     if (!content.analysis) continue;
     const intent = classifyContentIntent(content.analysis);
     const analyzedCategory = analyzedProductCategory(content.analysis.rawAnalysisJson);
-    if (intent.isSalesCandidate && content.productCategory === "UNKNOWN" && analyzedCategory !== "UNKNOWN") {
+    const restorableCategory = analyzedCategory !== "UNKNOWN" ? analyzedCategory : assetProductCategory(content.creativeAssets.map((asset) => asset.name));
+    if (intent.isSalesCandidate && content.productCategory === "UNKNOWN" && restorableCategory !== "UNKNOWN") {
       await prisma.$transaction([
-        prisma.pageContent.update({ where: { id: content.id }, data: { productCategory: analyzedCategory, productConfidence: 80, productEvidence: `CONTENT_INTENT_SALES_RESTORE:${analyzedCategory}:${intent.reason}` } }),
-        prisma.creativeAsset.updateMany({ where: { sourceContentId: content.id, isActive: true }, data: { productCategory: analyzedCategory, optimizationReason: intent.reason } }),
+        prisma.pageContent.update({ where: { id: content.id }, data: { productCategory: restorableCategory, productConfidence: 80, productEvidence: `CONTENT_INTENT_SALES_RESTORE:${restorableCategory}:${intent.reason}` } }),
+        prisma.creativeAsset.updateMany({ where: { sourceContentId: content.id, isActive: true }, data: { productCategory: restorableCategory, optimizationReason: intent.reason } }),
       ]);
-      content.productCategory = analyzedCategory;
+      content.productCategory = restorableCategory;
       restoredSalesClassifications += 1;
     }
     const shouldClearProduct = !intent.isSalesCandidate && ["COMEDY", "BEHIND_THE_SCENES", "BRAND_ENGAGEMENT"].includes(intent.contentIntent) && content.productCategory !== "UNKNOWN";
