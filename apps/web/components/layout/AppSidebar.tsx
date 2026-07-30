@@ -13,6 +13,7 @@ import {
   Settings,
   Sparkles,
   Film,
+  ListChecks,
 } from "lucide-react";
 
 type MenuItem = {
@@ -44,6 +45,11 @@ const menuGroups: MenuGroup[] = [
   {
     title: "OPERATIONS",
     items: [
+      {
+        title: "Media Buyer Queue",
+        href: "/marketing/media-buyer-queue",
+        icon: ListChecks,
+      },
       {
         title: "Content Intelligence",
         href: "/marketing/content-intelligence",
