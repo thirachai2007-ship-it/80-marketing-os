@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const healthAlerts = await prisma.decisionLog.findMany({ where: { decisionType: "META_INTEGRATION_HEALTH_ALERT" }, orderBy: { createdAt: "desc" }, take: 5, select: { action: true, reason: true, createdAt: true, outputJson: true } });
   const connection =
     await prisma.metaConnection.findFirst({
       orderBy: {
@@ -42,6 +43,7 @@ export async function GET() {
 
   return NextResponse.json({
     connected: connection.status === "ACTIVE",
+    healthAlerts,
     connection: {
       ...connection,
       grantedScopes: JSON.parse(
