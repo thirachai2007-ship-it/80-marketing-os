@@ -9,7 +9,8 @@ const MAX_RESPONSE_TEXT_LENGTH = 4_000;
 
 export type MetaAdapterMode =
   | "READ_ONLY"
-  | "TEST_ONLY";
+  | "TEST_ONLY"
+  | "PAUSED_WRITE_ONLY";
 
 export type MetaObjectStatus =
   | "PAUSED";
@@ -327,7 +328,8 @@ export function loadMetaAdapterConfig(options?: {
 
   if (
     modeRaw !== "READ_ONLY" &&
-    modeRaw !== "TEST_ONLY"
+    modeRaw !== "TEST_ONLY" &&
+    modeRaw !== "PAUSED_WRITE_ONLY"
   ) {
     throw new Error(
       "META_MARKETING_API_MODE ต้องเป็น READ_ONLY หรือ TEST_ONLY",
@@ -483,7 +485,9 @@ export class MetaMarketingApiAdapter {
 
     if (
       this.config.mode !==
-      "TEST_ONLY"
+        "TEST_ONLY" &&
+      this.config.mode !==
+        "PAUSED_WRITE_ONLY"
     ) {
       throw new Error(
         "Write ถูกบล็อก: META_MARKETING_API_MODE ต้องเป็น TEST_ONLY",

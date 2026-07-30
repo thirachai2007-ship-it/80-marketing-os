@@ -1459,13 +1459,19 @@ export async function orchestrateMetaPublish(
 
   const adapter =
     new MetaMarketingApiAdapter(
-      loadMetaAdapterConfig({
-        accessToken:
-          connection.accessToken,
-        additionalAllowedAdAccountIds: [
-          adAccountId,
-        ],
-      }),
+      {
+        ...loadMetaAdapterConfig({
+          accessToken:
+            connection.accessToken,
+          additionalAllowedAdAccountIds: [
+            adAccountId,
+          ],
+        }),
+        mode:
+          "PAUSED_WRITE_ONLY",
+        writesEnabled:
+          true,
+      },
     );
 
   const metaResult =
