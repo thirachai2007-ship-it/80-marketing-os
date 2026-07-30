@@ -49,6 +49,7 @@ const PAGE_DEFAULT_CATEGORY_RULES: Record<
 
 const STICKER_ONLY_PAGE_NAMES = [
   "Sticker2Day",
+  "TTN Sticker",
   "TTN สติกเกอร์สูญญากาศ",
   "สติกเกอร์ซิ่ง",
 ];

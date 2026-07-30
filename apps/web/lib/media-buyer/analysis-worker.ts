@@ -9,6 +9,7 @@ const PROMPT_VERSION = "80-media-buyer-v2";
 
 const STICKER_ONLY_PAGE_NAMES = [
   "Sticker2Day",
+  "TTN Sticker",
   "TTN สติกเกอร์สูญญากาศ",
   "สติกเกอร์ซิ่ง",
 ];
