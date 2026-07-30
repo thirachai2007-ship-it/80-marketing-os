@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import prisma from "@/lib/prisma";
 
 export const OWNER_APPROVAL_CENTER_VERSION =
-  "owner-approval-center-v1";
+  "owner-approval-center-v1.1-details";
 
 const DEFAULT_BATCH_SIZE = 20;
 const MAX_BATCH_SIZE = 100;
@@ -48,6 +48,35 @@ export type ApprovalQueueItem = {
   totalAds: number;
   readyAds: number;
   forecastDailyBudgetSatang: number;
+  adSetName: string;
+  timezone: string;
+  scheduleStart: string;
+  scheduleEnd: string;
+  activeDays: number[];
+  audiences: Array<{
+    id: string;
+    name: string;
+    type: string;
+    role: string;
+    allocationPercent: number | null;
+    budgetSatang: number | null;
+  }>;
+  ads: Array<{
+    id: string;
+    adNumber: number;
+    adName: string;
+    creativeMode: string;
+    primaryText: string | null;
+    headline: string | null;
+    description: string | null;
+    callToAction: string | null;
+    status: string;
+    postId: string | null;
+    mediaType: string | null;
+    mediaUrl: string | null;
+    thumbnailUrl: string | null;
+    permalinkUrl: string | null;
+  }>;
 
   queueFingerprint: string | null;
   queueDecisionId: string | null;
@@ -298,9 +327,14 @@ export async function listOwnerApprovalQueue(
         adAccountId: true,
         productCategory: true,
         objective: true,
+        adSetName: true,
         status: true,
         forecastDailyBudgetSatang:
           true,
+        timezone: true,
+        scheduleStart: true,
+        scheduleEnd: true,
+        activeDaysJson: true,
 
         page: {
           select: {
@@ -309,9 +343,41 @@ export async function listOwnerApprovalQueue(
         },
 
         ads: {
+          orderBy: { adNumber: "asc" },
           select: {
             id: true,
+            adNumber: true,
+            adName: true,
+            creativeMode: true,
+            primaryText: true,
+            headline: true,
+            description: true,
+            callToAction: true,
             status: true,
+            content: {
+              select: {
+                postId: true,
+                mediaType: true,
+                mediaUrl: true,
+                thumbnailUrl: true,
+                permalinkUrl: true,
+              },
+            },
+          },
+        },
+
+        audienceUsages: {
+          select: {
+            id: true,
+            role: true,
+            allocationPercent: true,
+            budgetSatang: true,
+            audienceAsset: {
+              select: {
+                name: true,
+                audienceType: true,
+              },
+            },
           },
         },
 
@@ -406,6 +472,45 @@ export async function listOwnerApprovalQueue(
         forecastDailyBudgetSatang:
           draft
             .forecastDailyBudgetSatang,
+
+        adSetName: draft.adSetName,
+        timezone: draft.timezone,
+        scheduleStart: draft.scheduleStart,
+        scheduleEnd: draft.scheduleEnd,
+        activeDays: (() => {
+          try {
+            const days = JSON.parse(draft.activeDaysJson) as unknown;
+            return Array.isArray(days)
+              ? days.filter((day): day is number => typeof day === "number")
+              : [];
+          } catch {
+            return [];
+          }
+        })(),
+        audiences: draft.audienceUsages.map((usage) => ({
+          id: usage.id,
+          name: usage.audienceAsset.name,
+          type: usage.audienceAsset.audienceType,
+          role: usage.role,
+          allocationPercent: usage.allocationPercent,
+          budgetSatang: usage.budgetSatang,
+        })),
+        ads: draft.ads.map((ad) => ({
+          id: ad.id,
+          adNumber: ad.adNumber,
+          adName: ad.adName,
+          creativeMode: ad.creativeMode,
+          primaryText: ad.primaryText,
+          headline: ad.headline,
+          description: ad.description,
+          callToAction: ad.callToAction,
+          status: ad.status,
+          postId: ad.content?.postId ?? null,
+          mediaType: ad.content?.mediaType ?? null,
+          mediaUrl: ad.content?.mediaUrl ?? null,
+          thumbnailUrl: ad.content?.thumbnailUrl ?? null,
+          permalinkUrl: ad.content?.permalinkUrl ?? null,
+        })),
 
         queueFingerprint:
           readQueueFingerprint(

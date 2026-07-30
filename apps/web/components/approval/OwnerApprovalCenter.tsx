@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   Check,
+  ChevronDown,
+  ExternalLink,
+  Eye,
   LoaderCircle,
   RefreshCw,
   ShieldCheck,
@@ -20,6 +23,35 @@ type QueueItem = {
   readyAds: number;
   forecastDailyBudgetSatang: number;
   queueFingerprint: string | null;
+  adSetName: string;
+  timezone: string;
+  scheduleStart: string;
+  scheduleEnd: string;
+  activeDays: number[];
+  audiences: Array<{
+    id: string;
+    name: string;
+    type: string;
+    role: string;
+    allocationPercent: number | null;
+    budgetSatang: number | null;
+  }>;
+  ads: Array<{
+    id: string;
+    adNumber: number;
+    adName: string;
+    creativeMode: string;
+    primaryText: string | null;
+    headline: string | null;
+    description: string | null;
+    callToAction: string | null;
+    status: string;
+    postId: string | null;
+    mediaType: string | null;
+    mediaUrl: string | null;
+    thumbnailUrl: string | null;
+    permalinkUrl: string | null;
+  }>;
   latestApprovalDecision: "APPROVE" | "REJECT" | null;
 };
 
@@ -55,6 +87,7 @@ export default function OwnerApprovalCenter() {
   const [data, setData] = useState<QueueResponse | null>(null);
   const [error, setError] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setError("");
@@ -332,6 +365,7 @@ export default function OwnerApprovalCenter() {
       <div className="space-y-4">
         {waiting.map((item) => {
           const busy = busyId === item.campaignDraftId;
+          const expanded = expandedId === item.campaignDraftId;
 
           return (
             <article
@@ -359,6 +393,92 @@ export default function OwnerApprovalCenter() {
                   </p>
                 </div>
               </div>
+
+              <button
+                type="button"
+                aria-expanded={expanded}
+                onClick={() =>
+                  setExpandedId(expanded ? null : item.campaignDraftId)
+                }
+                className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl border border-cyan-200 bg-cyan-50 px-4 py-3 font-semibold text-cyan-800 transition hover:bg-cyan-100"
+              >
+                <Eye size={18} />
+                {expanded ? "ปิดรายละเอียด" : "ดู Campaign, Ad Set และ Ad ก่อนอนุมัติ"}
+                <ChevronDown
+                  size={18}
+                  className={`transition ${expanded ? "rotate-180" : ""}`}
+                />
+              </button>
+
+              {expanded && (
+                <div className="mt-4 space-y-4 rounded-3xl border border-slate-200 bg-slate-50 p-4 sm:p-6">
+                  <section className="rounded-2xl bg-white p-4 shadow-sm">
+                    <p className="text-xs font-bold uppercase tracking-wider text-cyan-600">Campaign</p>
+                    <h3 className="mt-2 font-bold text-slate-950">{item.campaignName}</h3>
+                    <div className="mt-3 grid gap-3 text-sm sm:grid-cols-3">
+                      <p><span className="text-slate-500">เป้าหมาย:</span> {item.objective}</p>
+                      <p><span className="text-slate-500">งบต่อวัน:</span> {baht(item.forecastDailyBudgetSatang)}</p>
+                      <p><span className="text-slate-500">สถานะ:</span> PAUSED / รอเจ้าของอนุมัติ</p>
+                    </div>
+                  </section>
+
+                  <section className="rounded-2xl bg-white p-4 shadow-sm">
+                    <p className="text-xs font-bold uppercase tracking-wider text-violet-600">Ad Set</p>
+                    <h3 className="mt-2 font-bold text-slate-950">{item.adSetName}</h3>
+                    <div className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+                      <p><span className="text-slate-500">เวลา:</span> {item.scheduleStart}-{item.scheduleEnd} ({item.timezone})</p>
+                      <p><span className="text-slate-500">วันที่ทำงาน:</span> {item.activeDays.join(", ") || "ยังไม่ระบุ"}</p>
+                    </div>
+                    <div className="mt-4 space-y-2">
+                      <p className="text-sm font-semibold text-slate-800">กลุ่มเป้าหมายและการแบ่งงบ</p>
+                      {item.audiences.map((audience) => (
+                        <div key={audience.id} className="rounded-xl border border-slate-200 p-3 text-sm">
+                          <p className="font-semibold text-slate-900">{audience.name}</p>
+                          <p className="mt-1 text-slate-500">{audience.type} · {audience.role} · {audience.allocationPercent ?? 0}% · {baht(audience.budgetSatang ?? 0)}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+
+                  <section className="space-y-3">
+                    <p className="text-xs font-bold uppercase tracking-wider text-emerald-600">Ads ({item.ads.length})</p>
+                    {item.ads.map((ad) => {
+                      const isVideo = ad.mediaType?.toUpperCase().includes("VIDEO");
+                      const media = ad.mediaUrl || ad.thumbnailUrl;
+                      return (
+                        <article key={ad.id} className="overflow-hidden rounded-2xl bg-white shadow-sm">
+                          {media && (isVideo ? (
+                            <video controls playsInline preload="metadata" poster={ad.thumbnailUrl ?? undefined} className="mx-auto max-h-[70vh] w-full bg-black object-contain">
+                              <source src={ad.mediaUrl ?? undefined} />
+                            </video>
+                          ) : (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={media} alt={ad.adName} className="mx-auto max-h-[70vh] w-full bg-slate-100 object-contain" />
+                          ))}
+                          <div className="p-4">
+                            <div className="flex flex-wrap items-start justify-between gap-2">
+                              <h3 className="font-bold text-slate-950">Ad {ad.adNumber}: {ad.adName}</h3>
+                              <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">{ad.status}</span>
+                            </div>
+                            <p className="mt-3 whitespace-pre-wrap text-sm text-slate-700">{ad.primaryText || "ไม่มีข้อความหลัก"}</p>
+                            <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+                              <p><span className="text-slate-500">Headline:</span> {ad.headline || "-"}</p>
+                              <p><span className="text-slate-500">CTA:</span> {ad.callToAction || "-"}</p>
+                              <p><span className="text-slate-500">รูปแบบ:</span> {ad.creativeMode}</p>
+                              <p><span className="text-slate-500">Post ID:</span> {ad.postId || "-"}</p>
+                            </div>
+                            {ad.permalinkUrl && (
+                              <a href={ad.permalinkUrl} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-blue-600 hover:underline">
+                                <ExternalLink size={16} /> ดูโพสต์ต้นฉบับบน Facebook
+                              </a>
+                            )}
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </section>
+                </div>
+              )}
 
               <div className="mt-6 grid gap-3 sm:grid-cols-2">
                 <button
