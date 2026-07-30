@@ -1532,6 +1532,13 @@ export async function runCreativeRenderingBatch(
   const revisions =
     await prisma.creativeRevision.findMany({
       where: {
+        ...(options.executePaidRender
+          ? {
+              approvalStatus:
+                "APPROVED",
+            }
+          : {}),
+
         status: {
           in: [
             "READY_TO_RENDER",

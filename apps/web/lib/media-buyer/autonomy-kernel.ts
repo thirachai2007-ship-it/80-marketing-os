@@ -15,6 +15,7 @@ import { recordDailyPerformanceProofBenchmark } from "@/lib/media-buyer/performa
 import { runMetaIntegrationHealthMonitor } from "@/lib/meta/integration-health-monitor";
 import { runAudiencePerformanceBatch } from "@/lib/media-buyer/audience-performance-engine";
 import { runAudienceLearningBatch } from "@/lib/media-buyer/audience-learning-engine";
+import { runCreativeRenderingBatch } from "@/lib/media-buyer/creative-renderer";
 
 export const AUTONOMY_KERNEL_VERSION =
   "80ai-autonomy-kernel-v1";
@@ -26,6 +27,7 @@ const KERNEL_LOCK_KEY = 8_020_260_729;
 const BACKFILL_PAGE_LIMIT = 5;
 const ANALYSIS_BATCH_SIZE = 3;
 const CAMPAIGN_BATCH_SIZE = 5;
+const CREATIVE_RENDER_BATCH_SIZE = 1;
 const STALE_KERNEL_MS = 9 * 60 * 1000;
 const TRACKING_ACCOUNT_CONCURRENCY = 2;
 const MAXIMUM_CAMPAIGN_PAGES_PER_ACCOUNT = 50;
@@ -373,6 +375,17 @@ export async function runAutonomyKernel() {
 
     steps.push(await runStep("AUDIENCE_PERFORMANCE", () => runAudiencePerformanceBatch({ batchSize: 50 })));
     steps.push(await runStep("AUDIENCE_LEARNING", () => runAudienceLearningBatch({ batchSize: 50 })));
+
+    steps.push(
+      await runStep("OWNER_APPROVED_CREATIVE_RENDERING", () =>
+        runCreativeRenderingBatch({
+          batchSize:
+            CREATIVE_RENDER_BATCH_SIZE,
+          executePaidRender:
+            true,
+        }),
+      ),
+    );
 
     steps.push(
       await runStep("COMPANY_PORTFOLIO_OPTIMIZATION", () =>
