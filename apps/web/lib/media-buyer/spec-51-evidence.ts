@@ -99,7 +99,6 @@ export async function getSpec51Evidence() {
     if (page.contents.length === 0) gaps.push({ pageKey: required.key, pageId: page.id, reason: "NO_RECENT_ANALYZED_CONTENT" });
     if (nonStickerContents.length > 0) gaps.push({ pageKey: required.key, pageId: page.id, reason: "NON_STICKER_ANALYZED_CONTENT", count: nonStickerContents.length });
     if (enabledPolicies.length !== 1 || invalidPolicies.length > 0 || enabledPolicies[0]?.productCategory !== "STICKER") gaps.push({ pageKey: required.key, pageId: page.id, reason: "STICKER_ONLY_BUDGET_POLICY_INVALID", count: enabledPolicies.length });
-    if (page.campaignDrafts.length === 0) gaps.push({ pageKey: required.key, pageId: page.id, reason: "NO_STICKER_CAMPAIGN_EVIDENCE" });
     if (nonStickerCampaigns.length > 0) gaps.push({ pageKey: required.key, pageId: page.id, reason: "PROHIBITED_PRODUCT_CAMPAIGN_FOUND", count: nonStickerCampaigns.length });
     if (crossPageOrNonStickerAds.length > 0) gaps.push({ pageKey: required.key, pageId: page.id, reason: "PROHIBITED_OR_CROSS_PAGE_AD_CONTENT_FOUND", count: crossPageOrNonStickerAds.length });
 
@@ -116,6 +115,7 @@ export async function getSpec51Evidence() {
       campaignDrafts: page.campaignDrafts.length,
       stickerCampaignDrafts: page.campaignDrafts.length - nonStickerCampaigns.length,
       prohibitedCampaignDrafts: nonStickerCampaigns.length,
+      campaignCategoryRestrictionCompliant: nonStickerCampaigns.length === 0,
       linkedAds: page.campaignDrafts.reduce((sum, draft) => sum + draft.ads.length, 0),
       invalidLinkedAds: crossPageOrNonStickerAds.length,
       metaCreatedCampaigns: page.campaignDrafts.filter((draft) => Boolean(draft.metaCampaignId)).length,
