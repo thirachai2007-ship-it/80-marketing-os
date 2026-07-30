@@ -424,8 +424,10 @@ export async function syncMetaInsights({
         params,
         {
           accessToken: connection.accessToken,
-          timeoutMs: trigger === "SCHEDULED_AUTONOMY" ? 45_000 : undefined,
-          maxRetries: trigger === "SCHEDULED_AUTONOMY" ? 0 : undefined,
+          timeoutMs:
+            trigger === "SCHEDULED_AUTONOMY" || sweepId ? 45_000 : undefined,
+          maxRetries:
+            trigger === "SCHEDULED_AUTONOMY" || sweepId ? 0 : undefined,
         },
       );
     const rows = response.data || [];
