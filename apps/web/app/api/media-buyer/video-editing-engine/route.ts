@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { listVideoEditingCandidates, planVideoEdit, renderApprovedVideoEdit, syncVideoEditingLibrary, VIDEO_EDITING_ENGINE_VERSION, type VideoEditPlanInput } from "@/lib/media-buyer/video-editing-engine";
+import { listVideoEditingCandidates, planVideoEdit, renderApprovedVideoEdit, resolveOwnedMetaVideoSource, syncVideoEditingLibrary, VIDEO_EDITING_ENGINE_VERSION, type VideoEditPlanInput } from "@/lib/media-buyer/video-editing-engine";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,6 +15,7 @@ export async function POST(request: Request) {
     const input = await request.json() as VideoEditPlanInput & { action?: string };
     if (input.action === "RENDER_APPROVED") return NextResponse.json({ ok: true, ...(await renderApprovedVideoEdit(input.creativeRevisionId)) });
     if (input.action === "SYNC_LIBRARY") return NextResponse.json({ ok: true, ...(await syncVideoEditingLibrary()), candidates: await listVideoEditingCandidates() });
+    if (input.action === "RESOLVE_AUDIO_SOURCE") return NextResponse.json({ ok: true, ...(await resolveOwnedMetaVideoSource(input.creativeRevisionId)) });
     if (!input.creativeRevisionId?.trim()) return NextResponse.json({ ok: false, error: "กรุณาระบุ creativeRevisionId" }, { status: 400 });
     return NextResponse.json({ ok: true, ...(await planVideoEdit(input)) });
   } catch (error) {
