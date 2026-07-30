@@ -8,6 +8,11 @@ import {
   renderCampaignCreatives,
   runCreativeRendererBatch,
 } from "@/lib/media-buyer/creative-renderer-v1";
+import {
+  CREATIVE_RENDERING_ENGINE_VERSION,
+  renderCreativeRevision,
+  runCreativeRenderingBatch,
+} from "@/lib/media-buyer/creative-renderer";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,11 +40,11 @@ export async function GET() {
   return NextResponse.json({
     ok: true,
 
-    engine:
-      CREATIVE_RENDERER_VERSION,
+    engine: CREATIVE_RENDERING_ENGINE_VERSION,
+    legacyManifestEngine: CREATIVE_RENDERER_VERSION,
 
     mode:
-      "RENDER_MANIFEST_DRAFT_ONLY",
+      "AI_IMAGE_RENDERING_WITH_OWNER_GATE",
 
     responsibilities: [
       "อ่าน CampaignDraft และ CampaignDraftAd",
@@ -55,18 +60,11 @@ export async function GET() {
       "รอ Owner Approval",
     ],
 
-    limitations: {
-      renderMode:
-        "PASSTHROUGH_EXISTING_MEDIA",
-
-      binaryMediaGenerated:
-        false,
-
-      imageOrVideoEditing:
-        false,
-
-      mediaUploadedToMeta:
-        false,
+    capabilities: {
+      aiImageEditing: true,
+      binaryMediaGeneratedAfterOwnerApproval: true,
+      supportedModes: ["image-single", "image-batch", "single", "batch"],
+      legacyManifestPreserved: true,
     },
 
     safety: {
@@ -90,6 +88,12 @@ export async function GET() {
     },
 
     usage: {
+      imageSingle:
+        "POST /api/media-buyer/creative-renderer?mode=image-single&creativeRevisionId=REVISION_ID&executePaidRender=true",
+
+      imageBatch:
+        "POST /api/media-buyer/creative-renderer?mode=image-batch&batchSize=3&executePaidRender=true",
+
       single:
         "POST /api/media-buyer/creative-renderer?campaignDraftId=DRAFT_ID",
 
@@ -122,6 +126,78 @@ export async function POST(
           "forceRebuild",
         ),
       );
+
+    const executePaidRender =
+      parseBoolean(
+        params.get(
+          "executePaidRender",
+        ),
+      );
+
+    if (
+      mode === "image-single"
+    ) {
+      const creativeRevisionId =
+        params
+          .get("creativeRevisionId")
+          ?.trim();
+
+      if (!creativeRevisionId) {
+        return NextResponse.json(
+          {
+            ok: false,
+            paidRenderExecuted: false,
+            ownerApprovalRequired: true,
+            error: "กรุณาระบุ creativeRevisionId",
+          },
+          { status: 400 },
+        );
+      }
+
+      const result =
+        await renderCreativeRevision({
+          creativeRevisionId,
+          executePaidRender,
+          forceRender: forceRebuild,
+        });
+
+      return NextResponse.json({
+        ok: result.status !== "FAILED",
+        mode: "IMAGE_SINGLE",
+        ...result,
+      });
+    }
+
+    if (
+      mode === "image-batch"
+    ) {
+      const result =
+        await runCreativeRenderingBatch({
+          batchSize:
+            parseNumber(
+              params.get("batchSize"),
+              3,
+            ),
+          pageId:
+            params
+              .get("pageId")
+              ?.trim() ||
+            undefined,
+          productCategory:
+            params
+              .get("productCategory")
+              ?.trim() ||
+            undefined,
+          executePaidRender,
+          forceRender: forceRebuild,
+        });
+
+      return NextResponse.json({
+        ok: result.failed === 0,
+        mode: "IMAGE_BATCH",
+        ...result,
+      });
+    }
 
     if (mode === "batch") {
       const result =
