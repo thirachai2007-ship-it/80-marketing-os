@@ -13,7 +13,7 @@ import {
 } from "@/lib/media-buyer/content-fallback-policy";
 
 export const CANDIDATE_SELECTOR_VERSION =
-  "candidate-selector-v3.1";
+  "candidate-selector-v3.2-original-post-direct";
 
 export type CandidateProductCategory =
   | "COTTON_DTF"
@@ -487,6 +487,7 @@ function validateCandidatePolicy(input: {
   rankingScore: number;
   rankLabel: string;
   hasRevision: boolean;
+  originalExistingPost: boolean;
 
   minimumScore: number;
   allowExistingPost: boolean;
@@ -501,6 +502,7 @@ function validateCandidatePolicy(input: {
     rankingScore,
     rankLabel,
     hasRevision,
+    originalExistingPost,
     minimumScore,
     allowExistingPost,
     allowDarkPost,
@@ -511,7 +513,7 @@ function validateCandidatePolicy(input: {
     return "เป็นคอนเทนต์ซ้ำ";
   }
 
-  if (!hasRevision) {
+  if (!hasRevision && !originalExistingPost) {
     return "CreativeAsset ยังไม่มี CreativeRevision";
   }
 
@@ -912,7 +914,7 @@ export async function selectCampaignCandidates(
       1,
     );
 
-  const rawAssets =
+  const indexedAssets =
     await prisma.creativeAsset.findMany({
       where: {
         pageId:
@@ -1054,6 +1056,100 @@ export async function selectCampaignCandidates(
         },
       },
     });
+
+  const indexedContentIds = new Set(
+    indexedAssets
+      .map((asset) => asset.sourceContent?.id)
+      .filter((id): id is string => Boolean(id)),
+  );
+
+  const directOriginalPosts = await prisma.pageContent.findMany({
+    where: {
+      pageId: options.pageId,
+      productCategory: options.productCategory,
+      createdTime: { gte: getContentAnalysisCutoff() },
+      isDuplicate: false,
+      analysisStatus: "COMPLETED",
+      analysis: {
+        is: {
+          recommendation: "USE_EXISTING_POST",
+          useExistingPost: true,
+        },
+      },
+    },
+    orderBy: [{ createdTime: "desc" }],
+    take: candidateLimit,
+    select: {
+      id: true,
+      pageId: true,
+      pageName: true,
+      message: true,
+      postId: true,
+      objectStoryId: true,
+      permalinkUrl: true,
+      mediaType: true,
+      mediaUrl: true,
+      thumbnailUrl: true,
+      createdTime: true,
+      fingerprint: true,
+      contentFingerprint: true,
+      messageHash: true,
+      imageHash: true,
+      videoHash: true,
+      productCategory: true,
+      productConfidence: true,
+      previousWinner: true,
+      wasPreviouslyUsed: true,
+      isDuplicate: true,
+      isOldContent: true,
+      analysis: {
+        select: {
+          id: true,
+          totalScore: true,
+          recommendation: true,
+          useExistingPost: true,
+          darkPostEligible: true,
+          suggestedObjective: true,
+          summary: true,
+          confidence: true,
+          audienceFitScore: true,
+          audiencePlan: {
+            select: {
+              strategy: true,
+              confidence: true,
+              gender: true,
+              ageMin: true,
+              ageMax: true,
+              businessTypesJson: true,
+              interestsJson: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const rawAssets = [
+    ...indexedAssets,
+    ...directOriginalPosts
+      .filter((content) => !indexedContentIds.has(content.id))
+      .map((content) => ({
+        id: `original:${content.id}`,
+        pageId: content.pageId,
+        productCategory: content.productCategory,
+        status: "READY",
+        approvalStatus: "APPROVED",
+        mediaType: content.mediaType,
+        metadataJson: JSON.stringify({
+          sourceMode: "ORIGINAL_EXISTING_POST_DIRECT",
+          ownerOverride: "NO_AI_EDITING",
+        }),
+        currentVersion: 0,
+        sourceContent: content,
+        sourceAnalysis: content.analysis,
+        revisions: [],
+      })),
+  ];
 
   const eligibleCandidates:
     SelectedCampaignCandidate[] = [];
@@ -1239,6 +1335,11 @@ export async function selectCampaignCandidates(
 
         hasRevision:
           Boolean(revision),
+
+        originalExistingPost:
+          asset.id.startsWith("original:") &&
+          analysis.recommendation === "USE_EXISTING_POST" &&
+          analysis.useExistingPost,
 
         minimumScore:
           options.minimumScore,
