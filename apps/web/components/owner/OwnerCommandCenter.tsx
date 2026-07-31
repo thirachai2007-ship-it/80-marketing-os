@@ -158,11 +158,11 @@ export default function OwnerCommandCenter() {
           <p className="mt-5 inline-flex items-center gap-2 text-xs font-bold text-blue-700">ดูรายงานราย Ad พร้อมพรีวิว <ArrowRight size={14}/></p>
         </Link>
 
-        <Link href={workspaces[2].href} className="group rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm transition hover:shadow-lg">
+        <a href="/marketing/content-plan" className="group rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm transition hover:shadow-lg">
           <div className="flex items-center justify-between"><div><p className="text-xs font-bold text-amber-600">วางแผนทุก 7 วัน</p><h2 className="mt-1 text-lg font-bold text-slate-950">ความพร้อมคอนเทนต์</h2></div><CalendarClock className="text-amber-500" size={28}/></div>
           <div className="mt-6 rounded-2xl bg-amber-50 p-5"><div className="flex items-end justify-between"><div><p className="text-xs text-amber-700">คะแนนเฉลี่ยของโพสต์</p><strong className="text-4xl text-amber-950">{state.averageScore}</strong><span className="text-sm text-amber-700"> / 100</span></div><div className="h-20 w-3 overflow-hidden rounded-full bg-white"><div className="w-full bg-amber-500" style={{height:`${state.averageScore}%`, marginTop:`${100-state.averageScore}%`}}/></div></div><div className="mt-4 h-3 overflow-hidden rounded-full bg-white"><div className="h-full rounded-full bg-gradient-to-r from-rose-400 via-amber-400 to-emerald-500" style={{width:`${state.averageScore}%`}}/></div></div>
           <p className="mt-5 inline-flex items-center gap-2 text-xs font-bold text-amber-700">ดูสิ่งที่แต่ละเพจกำลังขาด <ArrowRight size={14}/></p>
-        </Link>
+        </a>
 
         <Link href={workspaces[3].href} className="group flex min-h-[260px] flex-col justify-between rounded-[28px] bg-gradient-to-br from-violet-600 to-fuchsia-600 p-6 text-white shadow-lg transition hover:shadow-xl">
           <div><MessageCircleMore size={34}/><h2 className="mt-5 text-2xl font-bold">คุยกับ 80 Marketing AI</h2><p className="mt-3 text-sm leading-6 text-violet-100">ถามเรื่องแอด กลุ่มเป้าหมาย ผลโฆษณา หรือแนบภาพ วิดีโอ และเอกสารได้ทุกเมื่อ</p></div><span className="inline-flex items-center gap-2 text-sm font-bold">เปิดแชท <ArrowRight size={16}/></span>

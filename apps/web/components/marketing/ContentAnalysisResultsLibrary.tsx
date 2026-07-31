@@ -1026,13 +1026,16 @@ export default function ContentAnalysisResultsLibrary() {
                               </div>
                               {mix && (
                                 <div>
-                                  <dt className="text-teal-700">สัดส่วนทดสอบกลุ่มเป้าหมาย</dt>
+                                  <dt className="text-teal-700">สัดส่วนงบทดสอบกลุ่มเป้าหมายที่แนะนำ</dt>
                                   <dd className="mt-2 grid grid-cols-3 gap-2 text-center font-bold text-teal-950">
                                     <span className="rounded-xl bg-white p-2">Broad {mix.broad}%</span>
                                     <span className="rounded-xl bg-white p-2">Retarget {mix.retarget}%</span>
                                     <span className="rounded-xl bg-white p-2">LAL {mix.lal}%</span>
                                   </dd>
                                   <p className="mt-2 text-[10px] leading-4 text-teal-700">{mix.note}</p>
+                                  <p className="mt-1 text-[10px] leading-4 text-teal-700">
+                                    คิดจากงบรวม 100% ไม่ใช่สัดส่วนจำนวนคน และใช้ Retarget/LAL เฉพาะเมื่อมีฐานข้อมูลจริงเพียงพอ
+                                  </p>
                                 </div>
                               )}
                               <div>

@@ -60,11 +60,32 @@ async function getLatestControl() {
   });
 }
 
+function getBangkokDayStart(now = new Date()) {
+  const bangkokTime = new Date(
+    now.getTime() + 7 * 60 * 60 * 1000,
+  );
+
+  return new Date(
+    Date.UTC(
+      bangkokTime.getUTCFullYear(),
+      bangkokTime.getUTCMonth(),
+      bangkokTime.getUTCDate(),
+    ) -
+      7 * 60 * 60 * 1000,
+  );
+}
+
 export async function getAnalysisBatchStatus() {
+  const now = new Date();
+  const todayStartedAt =
+    getBangkokDayStart(now);
   const [
     queue,
     control,
     latestBatch,
+    analyzedToday,
+    queuedToday,
+    failedToday,
   ] = await Promise.all([
     getAnalysisQueueStats(),
     getLatestControl(),
@@ -74,6 +95,28 @@ export async function getAnalysisBatchStatus() {
       },
       orderBy: {
         startedAt: "desc",
+      },
+    }),
+    prisma.contentAnalysis.count({
+      where: {
+        createdAt: {
+          gte: todayStartedAt,
+        },
+      },
+    }),
+    prisma.analysisQueueItem.count({
+      where: {
+        queuedAt: {
+          gte: todayStartedAt,
+        },
+      },
+    }),
+    prisma.analysisQueueItem.count({
+      where: {
+        status: "FAILED",
+        updatedAt: {
+          gte: todayStartedAt,
+        },
       },
     }),
   ]);
@@ -97,6 +140,15 @@ export async function getAnalysisBatchStatus() {
         true,
     },
     queue,
+    realtime: {
+      timezone: "Asia/Bangkok",
+      todayStartedAt,
+      analyzedToday,
+      queuedToday,
+      failedToday,
+      updatedAt: now,
+      refreshIntervalSeconds: 10,
+    },
     latestBatch: latestBatch
       ? {
           id: latestBatch.id,

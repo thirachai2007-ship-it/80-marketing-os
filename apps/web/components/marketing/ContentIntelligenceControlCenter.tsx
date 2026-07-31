@@ -48,6 +48,15 @@ type OrchestratorStatus = {
     queue: QueueStats;
     contentWaitingToBeQueued: number;
   };
+  realtime: {
+    timezone: "Asia/Bangkok";
+    todayStartedAt: string;
+    analyzedToday: number;
+    queuedToday: number;
+    failedToday: number;
+    updatedAt: string;
+    refreshIntervalSeconds: number;
+  };
   latestBatch: {
     id: string;
     status: string;
@@ -167,9 +176,11 @@ export default function ContentIntelligenceControlCenter() {
   const [approved, setApproved] =
     useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError("");
+  const load = useCallback(async (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+      setError("");
+    }
 
     try {
       const [
@@ -216,7 +227,9 @@ export default function ContentIntelligenceControlCenter() {
           : "เกิดข้อผิดพลาด",
       );
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   }, []);
 
@@ -224,6 +237,31 @@ export default function ContentIntelligenceControlCenter() {
     // Synchronize this client control center with the server-side orchestrator.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
+  }, [load]);
+
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState === "visible") {
+        void load(true);
+      }
+    };
+    const interval = window.setInterval(
+      refresh,
+      10_000,
+    );
+
+    document.addEventListener(
+      "visibilitychange",
+      refresh,
+    );
+
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener(
+        "visibilitychange",
+        refresh,
+      );
+    };
   }, [load]);
 
   async function control(
@@ -463,6 +501,49 @@ export default function ContentIntelligenceControlCenter() {
               ? "หยุดรอบใหม่"
               : "เปิดระบบต่อ"}
           </button>
+        </div>
+      </section>
+
+      <section className="mt-5 overflow-hidden rounded-[28px] border border-cyan-200 bg-gradient-to-r from-cyan-50 via-white to-teal-50 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-cyan-100 px-5 py-4">
+          <div className="flex items-center gap-3">
+            <span className="relative flex h-3 w-3">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+              <span className="relative inline-flex h-3 w-3 rounded-full bg-emerald-500" />
+            </span>
+            <div>
+              <h2 className="text-sm font-bold text-slate-900">
+                ผลวิเคราะห์วันนี้แบบเรียลไทม์
+              </h2>
+              <p className="text-[11px] text-slate-500">
+                อัปเดตอัตโนมัติทุก {status?.realtime.refreshIntervalSeconds ?? 10} วินาที · เวลาไทย
+              </p>
+            </div>
+          </div>
+          <p className="text-[11px] font-medium text-slate-500">
+            อัปเดตล่าสุด {dateTime(status?.realtime.updatedAt)}
+          </p>
+        </div>
+        <div className="grid grid-cols-2 divide-x divide-y divide-cyan-100 sm:grid-cols-3 lg:grid-cols-5 lg:divide-y-0">
+          {[
+            ["วิเคราะห์วันนี้", status?.realtime.analyzedToday ?? 0, "โพสต์"],
+            ["โพสต์เข้าใหม่วันนี้", status?.realtime.queuedToday ?? 0, "โพสต์"],
+            ["รอวิเคราะห์", queue?.ready ?? 0, "โพสต์"],
+            ["กำลังวิเคราะห์", queue?.processing ?? 0, "โพสต์"],
+            ["ล้มเหลววันนี้", status?.realtime.failedToday ?? 0, "โพสต์"],
+          ].map(([label, value, unit]) => (
+            <div key={String(label)} className="px-5 py-4">
+              <p className="text-[11px] font-semibold text-slate-500">
+                {label}
+              </p>
+              <p className="mt-1 text-2xl font-bold text-slate-950">
+                {number(Number(value))}{" "}
+                <span className="text-xs font-medium text-slate-400">
+                  {unit}
+                </span>
+              </p>
+            </div>
+          ))}
         </div>
       </section>
 
