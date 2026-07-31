@@ -70,12 +70,32 @@ export default function OwnerAiChat() {
   async function submit(event: FormEvent) {
     event.preventDefault();
     if ((!text.trim() && files.length === 0) || sending) return;
+    const submittedText = text.trim();
+    const submittedFiles = [...files];
+    const optimisticId = `optimistic-${Date.now()}`;
+    const optimisticMessage: ChatMessage = {
+      id: optimisticId,
+      role: "user",
+      content: submittedText,
+      attachments: submittedFiles.map((file) => ({
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        aiReadable: !file.type.startsWith("video/"),
+      })),
+      createdAt: new Date().toISOString(),
+    };
+
+    setMessages((current) => [...current, optimisticMessage]);
+    setText("");
+    setFiles([]);
+    if (inputRef.current) inputRef.current.value = "";
     setSending(true);
     setError("");
 
     const form = new FormData();
-    form.set("message", text.trim());
-    files.forEach((file) => form.append("files", file));
+    form.set("message", submittedText);
+    submittedFiles.forEach((file) => form.append("files", file));
 
     try {
       const response = await fetch("/api/media-buyer/owner-ai-chat", {
@@ -88,10 +108,10 @@ export default function OwnerAiChat() {
         error?: string;
       };
       if (!response.ok || !data.ok) throw new Error(data.error || "ส่งข้อความไม่สำเร็จ");
-      setMessages((current) => [...current, ...(data.messages ?? [])]);
-      setText("");
-      setFiles([]);
-      if (inputRef.current) inputRef.current.value = "";
+      setMessages((current) => [
+        ...current.filter((message) => message.id !== optimisticId),
+        ...(data.messages ?? []),
+      ]);
     } catch (sendError) {
       setError(sendError instanceof Error ? sendError.message : "ส่งข้อความไม่สำเร็จ");
     } finally {
