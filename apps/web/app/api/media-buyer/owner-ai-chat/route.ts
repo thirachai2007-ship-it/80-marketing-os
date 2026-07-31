@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { openai } from "@/lib/openai";
+import { runAutonomousMetaPreparationBatch } from "@/lib/media-buyer/autonomous-meta-preparer";
 import { hasValidOwnerSession, isSameOriginRequest } from "@/lib/owner-session";
 import prisma from "@/lib/prisma";
 
@@ -30,6 +31,19 @@ type AttachmentMeta = {
   size: number;
   aiReadable: boolean;
 };
+
+function requestsPausedMetaAction(message: string) {
+  const asksToCreate =
+    /(สร้าง|เตรียม|ส่งเข้า|ดำเนินการ|ทำ).{0,40}(โฆษณา|แคมเปญ|campaign|dark\s*post|meta)/i.test(
+      message,
+    );
+  const executeNow =
+    /(ให้เลย|ตอนนี้|ทำเลย|ดำเนินการเลย|เริ่มเลย|ทันที|ทั้งหมด)/i.test(message);
+  const questionOnly =
+    /(ทำได้ไหม|สามารถ.*ไหม|ได้หรือไม่|หรือเปล่า)\s*[?？]*$/i.test(message.trim());
+
+  return asksToCreate && executeNow && !questionOnly;
+}
 
 function parseJson<T>(value: string | null | undefined, fallback: T): T {
   if (!value) return fallback;
@@ -157,13 +171,57 @@ export async function POST(request: NextRequest) {
       aiReadable: !file.type.startsWith("video/"),
     }));
 
+    const [
+      metaConnection,
+      readyDraftCount,
+      pausedCampaignCount,
+    ] = await Promise.all([
+      prisma.metaConnection.findFirst({
+        orderBy: { updatedAt: "desc" },
+        select: {
+          status: true,
+          displayName: true,
+          lastValidatedAt: true,
+          _count: { select: { pages: true, adAccounts: true } },
+        },
+      }),
+      prisma.campaignDraft.count({
+        where: {
+          status: { in: ["READY_FOR_APPROVAL", "APPROVED"] },
+          metaCampaignId: null,
+          createdInMetaAt: null,
+        },
+      }),
+      prisma.campaignDraft.count({
+        where: {
+          metaCampaignId: { not: null },
+          createdInMetaAt: { not: null },
+        },
+      }),
+    ]);
+
+    const actionRequested = requestsPausedMetaAction(message);
+    const actionResult = actionRequested
+      ? await runAutonomousMetaPreparationBatch({ batchSize: 5 })
+      : null;
+
     const userLog = await prisma.decisionLog.create({
       data: {
         decisionType: CHAT_DECISION_TYPE,
         action: "OWNER_MESSAGE",
         reason: message || `แนบไฟล์ ${files.map((file) => file.name).join(", ")}`,
         confidence: 100,
-        inputJson: JSON.stringify({ attachments }),
+        inputJson: JSON.stringify({
+          attachments,
+          actionRequested,
+          actionResult,
+          liveContext: {
+            metaConnected: metaConnection?.status === "ACTIVE",
+            metaConnection,
+            readyDraftCount,
+            pausedCampaignCount,
+          },
+        }),
         policyJson: JSON.stringify({
           ownerAuthenticated: true,
           attachmentsValidated: true,
@@ -183,9 +241,21 @@ export async function POST(request: NextRequest) {
     const content: Array<Record<string, unknown>> = [];
     content.push({
       type: "input_text",
-      text:
+      text: [
         message ||
-        "โปรดตรวจไฟล์ที่แนบและให้คำแนะนำในบทบาท Media Buyer ของ 80T-shirt",
+          "โปรดตรวจไฟล์ที่แนบและให้คำแนะนำในบทบาท Media Buyer ของ 80T-shirt",
+        "",
+        "สถานะจริงจากระบบ ณ เวลานี้:",
+        `- Meta เชื่อมต่ออยู่: ${metaConnection?.status === "ACTIVE" ? "ใช่" : "ไม่ใช่"}`,
+        `- ชื่อการเชื่อมต่อ: ${metaConnection?.displayName ?? "-"}`,
+        `- Facebook Pages: ${metaConnection?._count.pages ?? 0}`,
+        `- Ad Accounts: ${metaConnection?._count.adAccounts ?? 0}`,
+        `- Campaign Draft ที่รอสร้างใน Meta: ${readyDraftCount}`,
+        `- Campaign Tree ที่สร้างใน Meta แล้ว: ${pausedCampaignCount}`,
+        actionResult
+          ? `- ผลการลงมือทำคำสั่งนี้: ตรวจ ${actionResult.scanned}, สำเร็จ ${actionResult.completed}, ล้มเหลว ${actionResult.failed}`
+          : "- คำสั่งนี้ยังไม่ได้สั่ง Engine ทำงาน เพราะเป็นคำถาม/คำแนะนำ หรือไม่ได้ระบุให้ลงมือทันที",
+      ].join("\n"),
     });
 
     for (const file of files) {
@@ -224,6 +294,9 @@ export async function POST(request: NextRequest) {
         "ห้ามอ้างว่าเปิดแคมเปญ ใช้เงิน เปลี่ยนงบ หรือเปลี่ยนวันเวลาแล้ว เพราะ Owner ต้องทำสิ่งเหล่านี้เองใน Meta",
         "ถ้าข้อมูลไม่พอให้บอกตรง ๆ ห้ามเดาประเภทสินค้า ประเภทคอนเทนต์ หรือผลลัพธ์โฆษณา",
         "คำแนะนำต้องสอดคล้องกับ Master Spec 77 ข้อ และต้องแยกคำแนะนำออกจากสิ่งที่ระบบได้ดำเนินการจริง",
+        "ต้องใช้สถานะจริงจากระบบที่แนบมากับข้อความ ห้ามบอกว่า Meta ไม่เชื่อมต่อหากสถานะระบุว่าเชื่อมต่อ",
+        "เมื่อผลการลงมือทำระบุว่าสำเร็จ ให้รายงานจำนวนที่สร้างจริง เมื่อไม่พบ Draft ให้บอกว่าไม่มี Draft พร้อมสร้าง ห้ามอ้างว่าสร้างแล้ว",
+        "แชทนี้สั่ง Autonomous Meta Preparation Engine ได้เมื่อ Owner ใช้คำสั่งลงมือชัดเจน ระบบจะสร้างได้เฉพาะ PAUSED เท่านั้น",
       ].join("\n"),
       input: [
         ...history,
@@ -244,7 +317,12 @@ export async function POST(request: NextRequest) {
         action: "AI_RESPONSE",
         reason: answer,
         confidence: 100,
-        inputJson: JSON.stringify({ ownerMessageId: userLog.id, attachments }),
+        inputJson: JSON.stringify({
+          ownerMessageId: userLog.id,
+          attachments,
+          actionRequested,
+          actionResult,
+        }),
         outputJson: JSON.stringify({
           model,
           responseId: response.id,
