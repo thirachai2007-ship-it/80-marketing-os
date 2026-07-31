@@ -316,6 +316,7 @@ export async function refreshExistingPausedTargetingBatch(
 
   for (const draft of drafts) {
     const metaAdSetId = draft.metaAdSetId!;
+    let attemptedTargeting: Record<string, unknown> | null = null;
     try {
       const metaState = await metaRequest<{
         id: string;
@@ -343,6 +344,7 @@ export async function refreshExistingPausedTargetingBatch(
       }
 
       const targetingPlan = await buildAutonomousTargeting(draft.id);
+      attemptedTargeting = targetingPlan.targeting;
       await metaRequest<{ success?: boolean }>(
         metaAdSetId,
         {},
@@ -398,6 +400,7 @@ export async function refreshExistingPausedTargetingBatch(
         metaAdSetId,
         status: "FAILED",
         error: error instanceof Error ? error.message : "Unknown targeting refresh error",
+        attemptedTargeting,
       });
     }
   }
