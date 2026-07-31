@@ -3,6 +3,8 @@ export const TARGET_ROAS = 5;
 export type AdPerformanceInput = {
   spendSatang: number;
   revenueSatang: number;
+  purchases: number;
+  activeDays: number;
   messages: number;
   impressions: number;
   clicks: number;
@@ -19,6 +21,8 @@ export type AdRecommendation = {
   ctr: number | null;
   costPerMessageSatang: number | null;
   fatigueRisk: boolean;
+  confidence: "LOW" | "MEDIUM" | "HIGH";
+  confidenceLabel: string;
 };
 
 export function adviseAdPerformance(input: AdPerformanceInput): AdRecommendation {
@@ -31,6 +35,14 @@ export function adviseAdPerformance(input: AdPerformanceInput): AdRecommendation
     : null;
   const fatigueRisk = (input.frequency ?? 0) >= 3.5 && (ctr ?? 100) < 1;
   const roasGap = roas === null ? null : Math.max(0, TARGET_ROAS - roas);
+  const revenueAnomaly = input.revenueSatang > 0 && input.purchases === 0;
+  const decisionReady = input.purchases >= 3 && input.activeDays >= 3;
+  const confidence = decisionReady && input.impressions >= 3_000
+    ? "HIGH"
+    : input.purchases >= 2 && input.activeDays >= 2
+      ? "MEDIUM"
+      : "LOW";
+  const confidenceLabel = confidence === "HIGH" ? "หลักฐานสูง" : confidence === "MEDIUM" ? "หลักฐานปานกลาง" : "หลักฐานยังน้อย";
 
   if (input.spendSatang < 10_000 || input.impressions < 1_000) {
     return {
@@ -43,6 +55,26 @@ export function adviseAdPerformance(input: AdPerformanceInput): AdRecommendation
       ctr,
       costPerMessageSatang,
       fatigueRisk,
+      confidence,
+      confidenceLabel,
+    };
+  }
+
+  if (revenueAnomaly || (roas !== null && roas >= TARGET_ROAS && !decisionReady)) {
+    return {
+      status: "COLLECT_DATA",
+      label: "เก็บข้อมูลต่อ",
+      reason: revenueAnomaly
+        ? `Meta ส่งมูลค่ายอดขาย ${Math.round(input.revenueSatang / 100).toLocaleString("th-TH")} บาท แต่ไม่พบจำนวน Purchase ที่ยืนยัน จึงยังห้ามใช้ ROAS ตัดสิน`
+        : `ROAS ${roas?.toFixed(2)} สูง แต่มี Purchase ${input.purchases} ครั้ง และข้อมูล ${input.activeDays} วัน ยังไม่ถึงเกณฑ์ยืนยันอย่างน้อย 3 Purchase และ 3 วัน`,
+      nextAction: "ตรวจ Purchase และ Attribution ใน Meta แล้วเก็บข้อมูลต่อ ห้ามเพิ่มงบหรือสรุปว่าเป็นแอดชนะจากยอดขายเพียงครั้งเดียว",
+      roas,
+      roasGap,
+      ctr,
+      costPerMessageSatang,
+      fatigueRisk,
+      confidence,
+      confidenceLabel,
     };
   }
 
@@ -57,6 +89,8 @@ export function adviseAdPerformance(input: AdPerformanceInput): AdRecommendation
       ctr,
       costPerMessageSatang,
       fatigueRisk,
+      confidence,
+      confidenceLabel,
     };
   }
 
@@ -76,6 +110,8 @@ export function adviseAdPerformance(input: AdPerformanceInput): AdRecommendation
       ctr,
       costPerMessageSatang,
       fatigueRisk,
+      confidence,
+      confidenceLabel,
     };
   }
 
@@ -97,5 +133,7 @@ export function adviseAdPerformance(input: AdPerformanceInput): AdRecommendation
     ctr,
     costPerMessageSatang,
     fatigueRisk,
+    confidence,
+    confidenceLabel,
   };
 }

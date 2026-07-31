@@ -53,7 +53,7 @@ async function getCreativeFallbacks(creativeIds: string[]) {
 
 export async function getAdPerformanceReport(days = 30) {
   const cutoff = new Date(Date.now() - days * 86_400_000);
-  const [ads, grouped] = await Promise.all([
+  const [ads, insightRows] = await Promise.all([
     prisma.metaAd.findMany({
       orderBy: { metaUpdatedTime: "desc" },
       select: {
@@ -70,17 +70,20 @@ export async function getAdPerformanceReport(days = 30) {
         adSet: { select: { name: true, effectiveStatus: true } },
       },
     }).catch(() => []),
-    prisma.metaAdInsight.groupBy({
-      by: ["adId"],
+    prisma.metaAdInsight.findMany({
       where: { dateStart: { gte: cutoff } },
-      _sum: {
+      select: {
+        adId: true,
+        dateStart: true,
+        dateStop: true,
         spendSatang: true,
         revenueSatang: true,
+        purchases: true,
         messagingConversationsStarted: true,
         impressions: true,
         clicks: true,
+        frequency: true,
       },
-      _avg: { frequency: true },
     }).catch(() => []),
   ]);
 
@@ -99,16 +102,28 @@ export async function getAdPerformanceReport(days = 30) {
   ]);
   const pageNames = new Map(pages.map((page) => [page.id, page.name]));
 
-  const insightByAd = new Map(grouped.map((item) => [item.adId, item]));
+  const rowsByAd = new Map<string, typeof insightRows>();
+  for (const row of insightRows) rowsByAd.set(row.adId, [...(rowsByAd.get(row.adId) ?? []), row]);
   return ads.map((ad) => {
-    const insight = insightByAd.get(ad.id);
+    const storedRows = rowsByAd.get(ad.id) ?? [];
+    const dailyRows = storedRows.filter((row) => row.dateStart.getTime() === row.dateStop.getTime());
+    const rows = dailyRows.length > 0
+      ? dailyRows
+      : storedRows.length > 0
+        ? [storedRows.reduce((latest, row) => row.dateStop > latest.dateStop ? row : latest)]
+        : [];
+    const total = <K extends "spendSatang" | "revenueSatang" | "purchases" | "messagingConversationsStarted" | "impressions" | "clicks">(key: K) => rows.reduce((sum, row) => sum + row[key], 0);
+    const frequencies = rows.flatMap((row) => row.frequency === null ? [] : [row.frequency]);
     const performance = {
-      spendSatang: insight?._sum.spendSatang ?? 0,
-      revenueSatang: insight?._sum.revenueSatang ?? 0,
-      messages: insight?._sum.messagingConversationsStarted ?? 0,
-      impressions: insight?._sum.impressions ?? 0,
-      clicks: insight?._sum.clicks ?? 0,
-      frequency: insight?._avg.frequency ?? null,
+      spendSatang: total("spendSatang"),
+      revenueSatang: total("revenueSatang"),
+      purchases: total("purchases"),
+      messages: total("messagingConversationsStarted"),
+      impressions: total("impressions"),
+      clicks: total("clicks"),
+      frequency: frequencies.length > 0 ? frequencies.reduce((sum, value) => sum + value, 0) / frequencies.length : null,
+      activeDays: new Set(rows.filter((row) => row.spendSatang > 0 || row.impressions > 0 || row.revenueSatang > 0).map((row) => row.dateStart.toISOString().slice(0, 10))).size,
+      aggregationBasis: dailyRows.length > 0 ? "DAILY_ONLY" as const : rows.length > 0 ? "LATEST_RANGE_ONLY" as const : "NO_DATA" as const,
     };
     let preview: (typeof contents)[number] | CreativePreview | null = contentByStory.get(ad.effectiveObjectStoryId ?? "") ?? contentByStory.get(ad.objectStoryId ?? "") ?? null;
     const creative = ad.creativeId ? creativeFallbacks.get(ad.creativeId) : null;
