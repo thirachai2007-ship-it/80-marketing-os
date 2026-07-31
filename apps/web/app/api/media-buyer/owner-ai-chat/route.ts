@@ -255,6 +255,9 @@ export async function POST(request: NextRequest) {
         actionResult
           ? `- ผลการลงมือทำคำสั่งนี้: ตรวจ ${actionResult.scanned}, สำเร็จ ${actionResult.completed}, ล้มเหลว ${actionResult.failed}`
           : "- คำสั่งนี้ยังไม่ได้สั่ง Engine ทำงาน เพราะเป็นคำถาม/คำแนะนำ หรือไม่ได้ระบุให้ลงมือทันที",
+        actionResult
+          ? `- รายละเอียดผลแต่ละ Draft: ${JSON.stringify(actionResult.results)}`
+          : "",
       ].join("\n"),
     });
 
@@ -296,6 +299,7 @@ export async function POST(request: NextRequest) {
         "คำแนะนำต้องสอดคล้องกับ Master Spec 77 ข้อ และต้องแยกคำแนะนำออกจากสิ่งที่ระบบได้ดำเนินการจริง",
         "ต้องใช้สถานะจริงจากระบบที่แนบมากับข้อความ ห้ามบอกว่า Meta ไม่เชื่อมต่อหากสถานะระบุว่าเชื่อมต่อ",
         "เมื่อผลการลงมือทำระบุว่าสำเร็จ ให้รายงานจำนวนที่สร้างจริง เมื่อไม่พบ Draft ให้บอกว่าไม่มี Draft พร้อมสร้าง ห้ามอ้างว่าสร้างแล้ว",
+        "ถ้า Draft ถูกข้าม ต้องรายงาน stage, status และ reason/detail จากรายละเอียดผลแต่ละ Draft เพื่อให้ Owner รู้สาเหตุจริง",
         "แชทนี้สั่ง Autonomous Meta Preparation Engine ได้เมื่อ Owner ใช้คำสั่งลงมือชัดเจน ระบบจะสร้างได้เฉพาะ PAUSED เท่านั้น",
       ].join("\n"),
       input: [
