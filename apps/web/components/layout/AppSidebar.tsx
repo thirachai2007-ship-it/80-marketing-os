@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 
 import {
   Bot,
@@ -96,12 +97,19 @@ function isMenuActive(pathname: string, href?: string) {
 
 export default function AppSidebar() {
   const pathname = usePathname();
-  const activeHref = menuGroups
+  const [pendingNavigation, setPendingNavigation] = useState<{
+    href: string;
+    fromPathname: string;
+  } | null>(null);
+  const resolvedActiveHref = menuGroups
     .flatMap((group) => group.items)
     .filter((item) => isMenuActive(pathname, item.href))
     .map((item) => item.href)
     .filter((href): href is string => Boolean(href))
     .sort((a, b) => b.length - a.length)[0];
+  const activeHref = pendingNavigation?.fromPathname === pathname
+    ? pendingNavigation.href
+    : resolvedActiveHref;
 
   return (
     <aside className="app-sidebar flex h-screen w-[260px] shrink-0 flex-col overflow-hidden border-r border-slate-800/80">
@@ -199,6 +207,7 @@ export default function AppSidebar() {
                   <Link
                     key={item.title}
                     href={item.href}
+                    onClick={() => item.href && setPendingNavigation({ href: item.href, fromPathname: pathname })}
                     className={[
                       "group relative flex h-11 w-full items-center justify-between overflow-hidden rounded-xl px-2.5 outline-none transition-all",
                       active

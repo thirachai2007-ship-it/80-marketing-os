@@ -1,4 +1,5 @@
 import AppShell from "@/components/layout/AppShell";
+import AdHealthFilters from "@/components/marketing/AdHealthFilters";
 import { getAdPerformanceReport } from "@/lib/media-buyer/ad-performance-report";
 import { ExternalLink, ImageIcon, ShieldCheck, Target, TriangleAlert } from "lucide-react";
 
@@ -15,9 +16,16 @@ const tone = {
   COLLECT_DATA: "bg-slate-50 text-slate-700 border-slate-200",
 };
 
-export default async function AdHealthPage() {
-  const ads = (await getAdPerformanceReport(30)).filter((ad) =>
+export default async function AdHealthPage({ searchParams }: { searchParams: Promise<{ page?: string; account?: string }> }) {
+  const selected = await searchParams;
+  const activeAds = (await getAdPerformanceReport(30)).filter((ad) =>
     ad.effectiveStatus === "ACTIVE" && ad.adSet.effectiveStatus === "ACTIVE" && ad.campaign.effectiveStatus === "ACTIVE"
+  );
+  const pageOptions = Array.from(new Map(activeAds.flatMap((ad) => ad.preview ? [[ad.preview.pageId, ad.preview.pageName] as const] : [])).entries()).map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label, "th"));
+  const accountOptions = Array.from(new Map(activeAds.map((ad) => [ad.adAccountId, `${ad.adAccount.name} (${ad.adAccountId})`] as const)).entries()).map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label, "th"));
+  const ads = activeAds.filter((ad) =>
+    (!selected.page || ad.preview?.pageId === selected.page) &&
+    (!selected.account || ad.adAccountId === selected.account)
   );
   const counts = ads.reduce<Record<string, number>>((sum, ad) => {
     sum[ad.recommendation.status] = (sum[ad.recommendation.status] ?? 0) + 1;
@@ -30,6 +38,7 @@ export default async function AdHealthPage() {
       <h1 className="heading-font mt-2 text-3xl font-bold text-slate-950">AI ตรวจคุณภาพโฆษณาที่กำลังเปิด</h1>
       <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-500">แสดงเฉพาะ Campaign, Ad Set และ Ad ที่ ACTIVE พร้อมพรีวิวครีเอทีฟจริง ชื่อแคมเปญ ชุดโฆษณา และชื่อแอด ระบบวิเคราะห์เท่านั้นและไม่แก้ไข Meta</p>
     </section>
+    <AdHealthFilters pages={pageOptions} accounts={accountOptions} currentPage={selected.page ?? ""} currentAccount={selected.account ?? ""}/>
     <div className="grid gap-3 sm:grid-cols-4">
       {[['CONTINUE','ควรไปต่อ'],['IMPROVE','ควรปรับปรุง'],['CONSIDER_STOP','พิจารณาหยุด'],['COLLECT_DATA','เก็บข้อมูลต่อ']].map(([key,label]) => <div key={key} className={`rounded-2xl border p-4 ${tone[key as keyof typeof tone]}`}><p className="text-xs font-bold">{label}</p><p className="mt-1 text-2xl font-black">{counts[key] ?? 0}</p></div>)}
     </div>

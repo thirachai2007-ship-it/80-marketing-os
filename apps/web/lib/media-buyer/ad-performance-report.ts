@@ -11,6 +11,7 @@ export async function getAdPerformanceReport(days = 30) {
         name: true,
         effectiveStatus: true,
         adAccountId: true,
+        adAccount: { select: { name: true } },
         objectStoryId: true,
         effectiveObjectStoryId: true,
         campaign: { select: { name: true, effectiveStatus: true } },
@@ -35,7 +36,7 @@ export async function getAdPerformanceReport(days = 30) {
   const contents = storyIds.length > 0
     ? await prisma.pageContent.findMany({
         where: { OR: [{ objectStoryId: { in: storyIds } }, { postId: { in: storyIds } }] },
-        select: { objectStoryId: true, postId: true, mediaUrl: true, thumbnailUrl: true, mediaType: true, message: true, permalinkUrl: true, analysis: { select: { id: true } } },
+        select: { objectStoryId: true, postId: true, pageId: true, pageName: true, mediaUrl: true, thumbnailUrl: true, mediaType: true, message: true, permalinkUrl: true, analysis: { select: { id: true } } },
       }).catch(() => [])
     : [];
   const contentByStory = new Map(contents.flatMap((content) => [[content.objectStoryId, content] as const, [content.postId, content] as const]));
