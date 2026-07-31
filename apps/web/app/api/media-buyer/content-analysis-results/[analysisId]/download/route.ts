@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { resolveOriginalContentMedia } from "@/lib/meta/original-content-media";
 
 function safeName(value: string) {
   return value.replace(/[^a-zA-Z0-9ก-๙_-]+/g, "-").replace(/-+/g, "-").slice(0, 80) || "media";
@@ -28,7 +29,7 @@ export async function GET(_request: Request, context: { params: Promise<{ analys
     select: { content: { select: { mediaUrl: true, thumbnailUrl: true, mediaType: true, pageName: true, productCategory: true } } },
   });
   if (!analysis) return NextResponse.json({ error: "ไม่พบผลวิเคราะห์" }, { status: 404 });
-  const source = analysis.content.mediaUrl ?? analysis.content.thumbnailUrl;
+  const source = await resolveOriginalContentMedia(analysisId) ?? analysis.content.mediaUrl ?? analysis.content.thumbnailUrl;
   if (!source || !allowedSource(source)) return NextResponse.json({ error: "โพสต์นี้ไม่มีไฟล์ต้นฉบับที่ดาวน์โหลดได้อย่างปลอดภัย" }, { status: 422 });
 
   const upstream = await fetch(source, { redirect: "error", cache: "no-store" }).catch(() => null);

@@ -7,6 +7,7 @@ import type {
   Prisma,
 } from "@/lib/generated/prisma/client";
 import prisma from "@/lib/prisma";
+import { ensureThreeDarkPostCopies } from "@/lib/media-buyer/dark-post-copy-policy";
 import {
   calibrateAiScore,
   rawScoreForCalibratedMinimum,
@@ -232,7 +233,7 @@ export async function GET(
           },
           darkPostCopies: {
             orderBy: { version: "asc" },
-            take: 3,
+            take: 5,
             select: {
               id: true,
               angleName: true,
@@ -397,7 +398,21 @@ export async function GET(
             darkPostCopyCount:
               analysis._count
                 .darkPostCopies,
-            darkPostCopies: analysis.darkPostCopies,
+            darkPostCopies: ensureThreeDarkPostCopies(
+              analysis.darkPostCopies.map((copy) => ({
+                angle: copy.angleName,
+                angleName: copy.angleName,
+                primaryText: copy.primaryText,
+                headline: copy.headline,
+                description: copy.description,
+                callToAction: copy.callToAction,
+              })),
+              analysis.content.message,
+            ).map((copy, index) => ({
+              id: analysis.darkPostCopies[index]?.id ?? `${analysis.id}-suggested-${index + 1}`,
+              ...copy,
+              version: analysis.darkPostCopies[index]?.version ?? index + 1,
+            })),
             modelName:
               analysis.modelName,
             updatedAt:

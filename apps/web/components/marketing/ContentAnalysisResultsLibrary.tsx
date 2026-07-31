@@ -5,6 +5,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
@@ -255,6 +256,18 @@ export default function ContentAnalysisResultsLibrary() {
     isVideo: boolean;
     title: string;
   } | null>(null);
+  const [fitMedia, setFitMedia] = useState(false);
+  const previewVideoRef = useRef<HTMLVideoElement | null>(null);
+  const [soundEnabled, setSoundEnabled] = useState(false);
+
+  const enablePreviewSound = useCallback(() => {
+    const video = previewVideoRef.current;
+    if (!video) return;
+    video.muted = false;
+    video.volume = 1;
+    void video.play();
+    setSoundEnabled(true);
+  }, []);
 
   const copyAdText = useCallback(async (id: string, text: string) => {
     await navigator.clipboard.writeText(text);
@@ -690,10 +703,11 @@ export default function ContentAnalysisResultsLibrary() {
                 item.analysis.weaknesses,
                 6,
               );
-            const recommendedCopy = item.analysis.darkPostCopies[0];
-            const readyToCopy = recommendedCopy
-              ? [recommendedCopy.primaryText, recommendedCopy.headline, recommendedCopy.description].filter(Boolean).join("\n\n")
+            const copyOptions = item.analysis.darkPostCopies.slice(0, 5);
+            const readyToCopy = copyOptions.length
+              ? copyOptions.map((copy, index) => `ข้อความหลัก ${index + 1}\n${copy.primaryText}\n\nพาดหัว ${index + 1}\n${copy.headline}`).join("\n\n--------------------\n\n")
               : item.content.message;
+            const originalMedia = `/api/media-buyer/content-analysis-results/${item.id}/original-media`;
 
             return (
               <article
@@ -705,7 +719,7 @@ export default function ContentAnalysisResultsLibrary() {
                     <button
                       type="button"
                       disabled={!fullMedia}
-                      onClick={() => fullMedia && setMediaPreview({ src: fullMedia, poster: item.content.thumbnailUrl, isVideo, title: item.content.pageName })}
+                      onClick={() => fullMedia && (setFitMedia(false), setSoundEnabled(false), setMediaPreview({ src: originalMedia, poster: item.content.thumbnailUrl, isVideo, title: item.content.pageName }))}
                       className="group relative aspect-[9/16] w-full max-w-[230px] overflow-hidden rounded-[24px] border border-white/10 bg-black shadow-xl disabled:cursor-default"
                       title="เปิดดูไฟล์ต้นฉบับขนาดใหญ่"
                     >
@@ -833,7 +847,17 @@ export default function ContentAnalysisResultsLibrary() {
                             {copiedId === item.id ? "คัดลอกแล้ว" : "คัดลอกข้อความ"}
                           </button>
                         </div>
-                        <p className="mt-3 line-clamp-4 whitespace-pre-wrap text-xs leading-5 text-slate-700">{readyToCopy}</p>
+                        <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                          {copyOptions.map((copy, index) => (
+                            <div key={copy.id} className="rounded-xl border border-violet-100 bg-white p-3">
+                              <p className="text-[10px] font-bold text-violet-700">ข้อความหลัก {index + 1}</p>
+                              <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-slate-700">{copy.primaryText}</p>
+                              <p className="mt-3 text-[10px] font-bold text-violet-700">พาดหัว {index + 1}</p>
+                              <p className="mt-1 text-sm font-bold text-slate-900">{copy.headline}</p>
+                              <button type="button" onClick={() => copyAdText(`${item.id}-${index}`, `${copy.primaryText}\n\n${copy.headline}`)} className="mt-3 inline-flex items-center gap-1 text-[10px] font-bold text-violet-700"><ClipboardCopy size={12}/>{copiedId === `${item.id}-${index}` ? "คัดลอกแล้ว" : "คัดลอกชุดนี้"}</button>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
 
@@ -1161,13 +1185,18 @@ export default function ContentAnalysisResultsLibrary() {
           aria-label={`พรีวิว ${mediaPreview.title}`}
           onClick={() => setMediaPreview(null)}
         >
+          <div className="absolute left-4 top-4 z-10 flex gap-2">
+            <button type="button" onClick={(event) => { event.stopPropagation(); setFitMedia(false); }} className={`rounded-full px-4 py-2 text-xs font-bold shadow-xl ${!fitMedia ? "bg-cyan-500 text-white" : "bg-white text-slate-900"}`}>ขนาดจริง 100%</button>
+            <button type="button" onClick={(event) => { event.stopPropagation(); setFitMedia(true); }} className={`rounded-full px-4 py-2 text-xs font-bold shadow-xl ${fitMedia ? "bg-cyan-500 text-white" : "bg-white text-slate-900"}`}>พอดีหน้าจอ</button>
+            {mediaPreview.isVideo && <button type="button" onClick={(event) => { event.stopPropagation(); enablePreviewSound(); }} className={`rounded-full px-4 py-2 text-xs font-bold shadow-xl ${soundEnabled ? "bg-emerald-500 text-white" : "bg-white text-slate-900"}`}>{soundEnabled ? "เปิดเสียงแล้ว 100%" : "เปิดเสียง"}</button>}
+          </div>
           <button type="button" onClick={() => setMediaPreview(null)} className="absolute right-4 top-4 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white text-slate-950 shadow-xl" aria-label="ปิดพรีวิว"><X size={22}/></button>
-          <div className="flex h-full w-full items-center justify-center" onClick={(event) => event.stopPropagation()}>
+          <div className={`h-full w-full overflow-auto ${fitMedia ? "flex items-center justify-center" : "block text-center"}`} onClick={(event) => event.stopPropagation()}>
             {mediaPreview.isVideo ? (
-              <video src={mediaPreview.src} poster={mediaPreview.poster ?? undefined} controls autoPlay playsInline className="max-h-full max-w-full bg-black object-contain shadow-2xl" />
+              <video ref={previewVideoRef} src={mediaPreview.src} poster={mediaPreview.poster ?? undefined} controls playsInline preload="metadata" onVolumeChange={(event) => setSoundEnabled(!event.currentTarget.muted && event.currentTarget.volume > 0)} className={fitMedia ? "max-h-full max-w-full bg-black object-contain shadow-2xl" : "inline-block h-auto max-w-none bg-black shadow-2xl"} />
             ) : (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={mediaPreview.src} alt={mediaPreview.title} className="max-h-full max-w-full object-contain shadow-2xl" />
+              <img src={mediaPreview.src} alt={mediaPreview.title} className={fitMedia ? "max-h-full max-w-full object-contain shadow-2xl" : "inline-block h-auto max-w-none shadow-2xl"} />
             )}
           </div>
           <div className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-black/70 px-4 py-2 text-center text-xs text-white">แสดงไฟล์ต้นฉบับ · คลิกพื้นที่ว่างหรือกด Esc เพื่อปิด</div>
