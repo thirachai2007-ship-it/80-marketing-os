@@ -999,6 +999,9 @@ export class MetaMarketingApiAdapter {
                     input.videoId,
                     "creative.videoId",
                   ),
+                image_url:
+                  input.imageUrl ??
+                  undefined,
                 message:
                   ensureNonEmpty(
                     input.primaryText,

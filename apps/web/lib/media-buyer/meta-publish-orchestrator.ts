@@ -52,6 +52,7 @@ type MetaPublishPayload = {
     description: string | null;
     callToAction: string;
     mediaUrl: string;
+    thumbnailUrl: string | null;
     mimeType: string | null;
   }>;
 };
@@ -1368,7 +1369,7 @@ export async function orchestrateMetaPublish(
               ad.mimeType
                 ?.toLowerCase()
                 .startsWith("video/")
-                ? null
+                ? ad.thumbnailUrl
                 : ad.mediaUrl,
 
             videoId:
