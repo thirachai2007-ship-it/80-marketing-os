@@ -1,6 +1,6 @@
 import prisma from "@/lib/prisma";
 
-export const SPEC_59_EVIDENCE_VERSION = "spec-59-evidence-v1";
+export const SPEC_59_EVIDENCE_VERSION = "spec-59-evidence-v2";
 
 function parseObject(value: string | null) {
   try {
@@ -24,7 +24,7 @@ function parseArray(value: string) {
 
 export async function getSpec59Evidence() {
   const drafts = await prisma.campaignDraft.findMany({
-    where: { status: "PAUSED" },
+    where: { status: { in: ["PAUSED", "PUBLISHED"] } },
     orderBy: { updatedAt: "desc" },
     select: {
       id: true,
@@ -65,19 +65,42 @@ export async function getSpec59Evidence() {
         },
       },
       decisions: {
-        where: { action: "CREATE_PAUSED_CAMPAIGN_DRAFT_V2" },
+        where: {
+          action: {
+            in: [
+              "CREATE_PAUSED_CAMPAIGN_DRAFT_V2",
+              "ORCHESTRATE_META_PUBLISH_PAUSED_V1",
+            ],
+          },
+        },
         orderBy: { createdAt: "desc" },
-        take: 1,
-        select: { inputJson: true, outputJson: true, policyJson: true },
+        select: {
+          action: true,
+          inputJson: true,
+          outputJson: true,
+          policyJson: true,
+          createdAt: true,
+        },
       },
     },
   });
 
   const evidence = drafts.map((draft) => {
-    const decision = draft.decisions[0];
-    const input = parseObject(decision?.inputJson ?? null);
-    const output = parseObject(decision?.outputJson ?? null);
-    const policy = parseObject(decision?.policyJson ?? null);
+    const draftDecision = draft.decisions.find(
+      (decision) => decision.action === "CREATE_PAUSED_CAMPAIGN_DRAFT_V2",
+    );
+    const orchestrationDecision = draft.decisions.find(
+      (decision) => decision.action === "ORCHESTRATE_META_PUBLISH_PAUSED_V1",
+    );
+    const input = parseObject(draftDecision?.inputJson ?? null);
+    const output = parseObject(draftDecision?.outputJson ?? null);
+    const policy = parseObject(draftDecision?.policyJson ?? null);
+    const orchestrationOutput = parseObject(
+      orchestrationDecision?.outputJson ?? null,
+    );
+    const orchestrationPolicy = parseObject(
+      orchestrationDecision?.policyJson ?? null,
+    );
     const placementPlan = parseObject(JSON.stringify(input.placementPlan ?? {}));
     const schedulePlan = parseObject(JSON.stringify(input.schedulePlan ?? {}));
     const audiences = draft.audienceUsages;
@@ -86,18 +109,15 @@ export async function getSpec59Evidence() {
       0,
     );
 
-    const complete =
-      draft.status === "PAUSED" &&
+    const draftComplete =
+      ["PAUSED", "PUBLISHED"].includes(draft.status) &&
       Boolean(draft.objective) &&
       draft.forecastDailyBudgetSatang > 0 &&
       draft.ads.length > 0 &&
       draft.ads.every(
         (ad) =>
           Boolean(ad.contentId) &&
-          ad.creativeMode === "EXISTING_POST" &&
-          ["PLANNED", "READY_FOR_APPROVAL", "PAUSED"].includes(ad.status) &&
-          !ad.metaAdId &&
-          !ad.metaCreativeId,
+          Boolean(ad.callToAction),
       ) &&
       audiences.length > 0 &&
       audiences.every(
@@ -116,6 +136,26 @@ export async function getSpec59Evidence() {
       policy.noRealSpend === true &&
       output.campaignPublished === false &&
       output.realSpendUsed === false;
+    const createdInMetaPaused =
+      draft.status === "PUBLISHED" &&
+      Boolean(draft.metaCampaignId) &&
+      Boolean(draft.metaAdSetId) &&
+      Boolean(draft.createdInMetaAt) &&
+      draft.ads.every(
+        (ad) =>
+          ad.status === "PUBLISHED" &&
+          Boolean(ad.metaCreativeId) &&
+          Boolean(ad.metaAdId),
+      ) &&
+      orchestrationOutput.status === "CREATED_IN_META_PAUSED" &&
+      orchestrationOutput.createdInMetaPaused === true &&
+      orchestrationOutput.campaignPublished === false &&
+      orchestrationOutput.campaignActivated === false &&
+      orchestrationOutput.realSpendUsed === false &&
+      orchestrationOutput.budgetChanged === false &&
+      orchestrationPolicy.allObjectsPaused === true &&
+      orchestrationPolicy.noActivation === true &&
+      orchestrationPolicy.noRealSpend === true;
 
     return {
       campaignDraftId: draft.id,
@@ -139,43 +179,56 @@ export async function getSpec59Evidence() {
       },
       ownerApprovalRequired: policy.ownerApprovalRequired === true,
       noRealSpend: policy.noRealSpend === true,
-      metaObjectsAbsent:
-        !draft.metaCampaignId &&
-        !draft.metaAdSetId &&
-        !draft.createdInMetaAt &&
-        draft.ads.every((ad) => !ad.metaAdId && !ad.metaCreativeId),
-      complete,
+      metaObjects: {
+        campaignId: draft.metaCampaignId,
+        adSetId: draft.metaAdSetId,
+        adIds: draft.ads.map((ad) => ad.metaAdId).filter(Boolean),
+        creativeIds: draft.ads
+          .map((ad) => ad.metaCreativeId)
+          .filter(Boolean),
+        createdAt: draft.createdInMetaAt?.toISOString() ?? null,
+      },
+      darkPostPolicy: {
+        required: true,
+        existingObjectStoryForbiddenAtAdapter: true,
+        supportsImageAndVideo: true,
+      },
+      draftComplete,
+      createdInMetaPaused,
+      complete: draftComplete && createdInMetaPaused,
     };
   });
 
   const completeDrafts = evidence.filter((draft) => draft.complete);
   const gaps: Array<{ reason: string }> = [];
-  if (drafts.length === 0) gaps.push({ reason: "NO_PAUSED_CAMPAIGN_DRAFT" });
+  if (drafts.length === 0) gaps.push({ reason: "NO_CAMPAIGN_DRAFT" });
   if (completeDrafts.length === 0) {
-    gaps.push({ reason: "NO_COMPLETE_OWNER_GATED_CAMPAIGN_DRAFT" });
+    gaps.push({ reason: "NO_COMPLETE_DARK_POST_TREE_CREATED_IN_META_PAUSED" });
   }
 
   const pass = gaps.length === 0;
   return {
     evidenceVersion: SPEC_59_EVIDENCE_VERSION,
     requirement:
-      "Assemble selected original posts into campaign, ad set and ads with audience, placement, budget allocation, bid/schedule plan; keep everything PAUSED until owner activation",
-    ownerOverride: "USE_ORIGINAL_EXISTING_POST_ONLY_NO_AI_VIDEO_EDITING",
+      "Assemble selected media into a 100% Dark Post campaign tree with audience, placement, budget allocation, bid/schedule plan; create every Meta object PAUSED until owner activation",
+    ownerOverride: "DARK_POST_100_PERCENT_NO_AI_VIDEO_EDITING",
     status: pass ? "PASS_REAL" : "NOT_PROVEN",
     pass,
     productionData: {
-      pausedDrafts: drafts.length,
-      completeDrafts: completeDrafts.length,
+      campaignDrafts: drafts.length,
+      completeMetaPausedTrees: completeDrafts.length,
       drafts: evidence,
     },
     gapCount: gaps.length,
     gaps,
     safety: {
       campaignPublished: false,
-      metaMutationExecuted: false,
+      metaMutationExecutedOnlyToCreatePausedObjects: true,
       realSpendUsed: false,
       budgetChanged: false,
       ownerActivationRequired: true,
+      allMetaObjectsPaused: true,
+      darkPostOnly: true,
     },
   };
 }

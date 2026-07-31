@@ -2048,8 +2048,8 @@ async function releaseStaleLocks(): Promise<number> {
           1000,
     );
 
-  const result =
-    await prisma.analysisQueueItem.updateMany({
+  const staleItems =
+    await prisma.analysisQueueItem.findMany({
       where: {
         status:
           "RUNNING",
@@ -2060,25 +2060,247 @@ async function releaseStaleLocks(): Promise<number> {
         },
       },
 
-      data: {
-        status:
-          "READY",
-
-        lockedBy:
-          null,
-
-        lockedAt:
-          null,
-
-        startedAt:
-          null,
-
-        errorMessage:
-          "ปลด Stale Lock อัตโนมัติ",
+      select: {
+        id: true,
+        contentId: true,
+        attempts: true,
+        maxAttempts: true,
       },
     });
 
-  return result.count;
+  const retryableIds =
+    staleItems
+      .filter(
+        (item) =>
+          item.attempts <
+          item.maxAttempts,
+      )
+      .map((item) => item.id);
+  const exhausted =
+    staleItems.filter(
+      (item) =>
+        item.attempts >=
+        item.maxAttempts,
+    );
+
+  await prisma.$transaction([
+    prisma.analysisQueueItem.updateMany({
+      where: {
+        id: {
+          in: retryableIds,
+        },
+        status: "RUNNING",
+      },
+      data: {
+        status: "READY",
+        lockedBy: null,
+        lockedAt: null,
+        startedAt: null,
+        errorMessage:
+          "ปลด Stale Lock อัตโนมัติ",
+      },
+    }),
+    prisma.analysisQueueItem.updateMany({
+      where: {
+        id: {
+          in: exhausted.map(
+            (item) => item.id,
+          ),
+        },
+        status: "RUNNING",
+      },
+      data: {
+        status: "FAILED",
+        lockedBy: null,
+        lockedAt: null,
+        completedAt: new Date(),
+        errorMessage:
+          "Stale Lock ใช้ Retry ครบแล้ว",
+      },
+    }),
+    prisma.pageContent.updateMany({
+      where: {
+        id: {
+          in: exhausted.map(
+            (item) =>
+              item.contentId,
+          ),
+        },
+        analysisStatus: {
+          not: "COMPLETED",
+        },
+      },
+      data: {
+        analysisStatus: "FAILED",
+        analysisError:
+          "Stale Lock ใช้ Retry ครบแล้ว",
+        campaignStatus:
+          "NOT_READY",
+      },
+    }),
+  ]);
+
+  return staleItems.length;
+}
+
+async function repairLegacyExhaustedReadyItems(
+  input: {
+    pageId?: string;
+    productCategory?: string;
+    mediaType?: string;
+  },
+): Promise<number> {
+  const readyItems =
+    await prisma.analysisQueueItem.findMany({
+      where: {
+        status: "READY",
+        content: {
+          createdTime: {
+            gte:
+              getContentAnalysisCutoff(),
+          },
+          ...(input.pageId
+            ? {
+                pageId:
+                  input.pageId,
+              }
+            : {}),
+          ...(input.productCategory
+            ? {
+                productCategory:
+                  input.productCategory,
+              }
+            : {}),
+          ...(input.mediaType
+            ? {
+                mediaType:
+                  normalizeText(
+                    input.mediaType,
+                  ).toUpperCase(),
+              }
+            : {}),
+        },
+      },
+      select: {
+        id: true,
+        attempts: true,
+        maxAttempts: true,
+      },
+    });
+  const exhaustedIds =
+    readyItems
+      .filter(
+        (item) =>
+          item.attempts >=
+          item.maxAttempts,
+      )
+      .map((item) => item.id);
+
+  if (
+    exhaustedIds.length === 0
+  ) {
+    return 0;
+  }
+
+  const repaired =
+    await prisma.analysisQueueItem.updateMany({
+      where: {
+        id: {
+          in: exhaustedIds,
+        },
+        status: "READY",
+      },
+      data: {
+        attempts: 0,
+        lockedBy: null,
+        lockedAt: null,
+        startedAt: null,
+        completedAt: null,
+        errorMessage:
+          "กู้ READY ค้างจาก Queue Eligibility รุ่นเดิม",
+        reason:
+          "LEGACY_EXHAUSTED_READY_RECOVERY_V1",
+      },
+    });
+
+  return repaired.count;
+}
+
+async function repairLegacyFailedItems(): Promise<number> {
+  const failedItems =
+    await prisma.analysisQueueItem.findMany({
+      where: {
+        status: "FAILED",
+        reason: {
+          not:
+            "FAILED_RECOVERY_V1",
+        },
+        content: {
+          createdTime: {
+            gte:
+              getContentAnalysisCutoff(),
+          },
+          isDuplicate: false,
+          analysisStatus: {
+            not: "COMPLETED",
+          },
+        },
+      },
+      select: {
+        id: true,
+        contentId: true,
+      },
+    });
+
+  if (
+    failedItems.length === 0
+  ) {
+    return 0;
+  }
+
+  await prisma.$transaction([
+    prisma.analysisQueueItem.updateMany({
+      where: {
+        id: {
+          in: failedItems.map(
+            (item) => item.id,
+          ),
+        },
+        status: "FAILED",
+      },
+      data: {
+        status: "READY",
+        reason:
+          "FAILED_RECOVERY_V1",
+        attempts: 0,
+        lockedBy: null,
+        lockedAt: null,
+        startedAt: null,
+        completedAt: null,
+        errorMessage:
+          "ลองวิเคราะห์ใหม่หลังแก้ Queue Eligibility",
+      },
+    }),
+    prisma.pageContent.updateMany({
+      where: {
+        id: {
+          in: failedItems.map(
+            (item) =>
+              item.contentId,
+          ),
+        },
+        analysisStatus: {
+          not: "COMPLETED",
+        },
+      },
+      data: {
+        analysisStatus: "QUEUED",
+        analysisError: null,
+      },
+    }),
+  ]);
+
+  return failedItems.length;
 }
 
 async function claimNextQueueItem(input: {
@@ -2094,15 +2316,11 @@ async function claimNextQueueItem(input: {
   maxAttempts: number;
 } | null> {
   const candidate =
-    await prisma.analysisQueueItem.findFirst({
+    (
+      await prisma.analysisQueueItem.findMany({
       where: {
         status:
           "READY",
-
-        attempts: {
-          lt:
-            3,
-        },
 
         content: {
           createdTime: {
@@ -2169,7 +2387,13 @@ async function claimNextQueueItem(input: {
         attempts: true,
         maxAttempts: true,
       },
-    });
+      take: 50,
+    })
+    ).find(
+      (item) =>
+        item.attempts <
+        item.maxAttempts,
+    ) ?? null;
 
   if (!candidate) {
     return null;
@@ -3164,6 +3388,15 @@ export async function runContentAnalysisWorker(
     `content-analysis-${process.pid}-${Date.now()}`;
 
   await releaseStaleLocks();
+  await repairLegacyExhaustedReadyItems({
+    pageId:
+      options.pageId,
+    productCategory:
+      options.productCategory,
+    mediaType:
+      options.mediaType,
+  });
+  await repairLegacyFailedItems();
 
   const queued =
     options.queuePendingContent ===
