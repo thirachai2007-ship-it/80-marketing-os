@@ -50,18 +50,25 @@ export async function resolveOriginalContentMedia(analysisId: string) {
     const attachment = post.attachments?.data?.[0];
     const targetId = attachment?.target?.id;
     if (targetId) {
-      const target = await metaRequest<MetaTargetMedia>(
-        targetId,
-        { fields: "source,images" },
-        { accessToken: page.accessToken },
-      );
-      if (analysis.content.mediaType.toLowerCase().includes("video") && target.source) {
-        return target.source;
+      if (analysis.content.mediaType.toLowerCase().includes("video")) {
+        const video = await metaRequest<MetaTargetMedia>(
+          targetId,
+          { fields: "source" },
+          { accessToken: page.accessToken },
+        );
+        if (video.source) return video.source;
       }
-      const largest = [...(target.images ?? [])]
-        .filter((image) => image.source)
-        .sort((a, b) => (b.width ?? 0) * (b.height ?? 0) - (a.width ?? 0) * (a.height ?? 0))[0];
-      if (largest?.source) return largest.source;
+      else {
+        const photo = await metaRequest<MetaTargetMedia>(
+          targetId,
+          { fields: "images" },
+          { accessToken: page.accessToken },
+        );
+        const largest = [...(photo.images ?? [])]
+          .filter((image) => image.source)
+          .sort((a, b) => (b.width ?? 0) * (b.height ?? 0) - (a.width ?? 0) * (a.height ?? 0))[0];
+        if (largest?.source) return largest.source;
+      }
     }
 
     return analysis.content.mediaType.toLowerCase().includes("video")
