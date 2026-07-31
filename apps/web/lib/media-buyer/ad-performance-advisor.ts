@@ -95,16 +95,15 @@ export function adviseAdPerformance(input: AdPerformanceInput): AdRecommendation
   }
 
   if (
+    decisionReady &&
     input.spendSatang >= 50_000 &&
-    (input.messages === 0 || (roas !== null && roas < 1))
+    input.messages === 0
   ) {
     return {
       status: "CONSIDER_STOP",
       label: "พิจารณาหยุด",
-      reason: input.messages === 0
-        ? "มีค่าโฆษณาสะสมพอสมควรแต่ยังไม่มีแชท จึงมีความเสี่ยงใช้เงินต่อโดยไม่ได้ผลลัพธ์"
-        : `ROAS ${roas?.toFixed(2)} ต่ำกว่า 1 เท่าและห่างจากเป้าหมาย ${TARGET_ROAS} เท่ามาก`,
-      nextAction: "ตรวจ Attribution และยอดขายก่อน หากข้อมูลถูกต้องให้หยุดตัวเดิมและนำครีเอทีฟใหม่ขึ้นทดสอบแทน",
+      reason: "มีค่าโฆษณาสะสมพอสมควร มีข้อมูลอย่างน้อย 3 วัน และยังไม่มีแชท จึงมีความเสี่ยงใช้เงินต่อโดยไม่ได้ลูกค้าเป้าหมาย",
+      nextAction: "ตรวจ Attribution และช่องทางแชทอีกครั้ง หากข้อมูลถูกต้องจึงพิจารณาหยุดตัวเดิมและนำครีเอทีฟใหม่ขึ้นทดสอบแทน",
       roas,
       roasGap,
       ctr,
@@ -117,6 +116,8 @@ export function adviseAdPerformance(input: AdPerformanceInput): AdRecommendation
 
   const reason = fatigueRisk
     ? `ความถี่ ${(input.frequency ?? 0).toFixed(2)} สูง ขณะที่ CTR ${(ctr ?? 0).toFixed(2)}% ต่ำ มีสัญญาณครีเอทีฟอ่อนล้า`
+    : roas !== null && roas < 1 && input.messages > 0
+      ? `Meta บันทึก ROAS ${roas.toFixed(2)} แต่แอดสร้าง ${input.messages.toLocaleString("th-TH")} แชท จึงยังสรุปไม่ได้ว่าแอดหาลูกค้าไม่ได้ เพราะยอดอาจเป็นมัดจำ ยอดปิดภายหลัง หรือรายได้บันทึกไม่ครบ`
     : roas === null
       ? "ยังไม่มีข้อมูลยอดขายที่ผูกกับแอด จึงประเมิน ROAS 5 เท่าไม่ได้"
       : `ROAS ${roas.toFixed(2)} ยังต่ำกว่าเป้าหมาย ${TARGET_ROAS} เท่าอยู่ ${roasGap?.toFixed(2)} เท่า`;
@@ -127,6 +128,8 @@ export function adviseAdPerformance(input: AdPerformanceInput): AdRecommendation
     reason,
     nextAction: fatigueRisk
       ? "เปลี่ยนภาพหรือวิดีโอและ Hook โดยคงข้อเสนอหลักไว้ แล้วนำตัวใหม่ขึ้นทดสอบเทียบ"
+      : roas !== null && roas < 1 && input.messages > 0
+        ? "ตรวจยอดมัดจำ ยอดปิดการขาย และจำนวนลูกค้าใหม่จากระบบร้านเทียบกับแชทก่อนตัดสินใจ พร้อมปรับครีเอทีฟหรือคุณภาพกลุ่มเป้าหมายหากแชทไม่ปิดการขาย"
       : "ตรวจข้อเสนอ ข้อความ CTA กลุ่มเป้าหมาย และทดสอบครีเอทีฟใหม่ก่อนเพิ่มงบ",
     roas,
     roasGap,
