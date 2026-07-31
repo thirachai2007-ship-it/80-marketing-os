@@ -102,7 +102,7 @@ export default function OwnerCommandCenter() {
             READ-ONLY MARKETING ADVISOR
           </div>
           <h1 className="heading-font mt-5 text-3xl font-bold sm:text-4xl">
-            80 Marketing AI วิเคราะห์และแนะนำ คุณเป็นผู้ทำโฆษณาใน Meta
+            80 Marketing AI
           </h1>
           <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-300">
             ระบบอ่านข้อมูลโพสต์ย้อนหลัง 75 วันและผลโฆษณาจาก Meta เพื่อช่วยคัดโพสต์
