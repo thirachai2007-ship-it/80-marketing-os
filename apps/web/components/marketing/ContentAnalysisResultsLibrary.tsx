@@ -12,6 +12,7 @@ import {
   ArrowRight,
   BrainCircuit,
   CheckCircle2,
+  ClipboardCopy,
   Download,
   ExternalLink,
   Filter,
@@ -244,6 +245,13 @@ export default function ContentAnalysisResultsLibrary() {
     useState(1);
   const [expandedId, setExpandedId] =
     useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const copyAdText = useCallback(async (id: string, text: string) => {
+    await navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    window.setTimeout(() => setCopiedId((current) => current === id ? null : current), 1800);
+  }, []);
 
   const requestUrl = useMemo(() => {
     const params =
@@ -642,14 +650,19 @@ export default function ContentAnalysisResultsLibrary() {
                 item.analysis.weaknesses,
                 6,
               );
+            const recommendedCopy = item.analysis.darkPostCopies[0];
+            const readyToCopy = recommendedCopy
+              ? [recommendedCopy.primaryText, recommendedCopy.headline, recommendedCopy.description].filter(Boolean).join("\n\n")
+              : item.content.message;
 
             return (
               <article
                 key={item.id}
                 className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm"
               >
-                <div className="grid gap-0 md:grid-cols-[180px_1fr]">
-                  <div className="flex min-h-[180px] items-center justify-center bg-slate-100">
+                <div className="grid gap-0 md:grid-cols-[260px_1fr]">
+                  <div className="flex items-start justify-center bg-slate-950 p-3">
+                    <div className="aspect-[9/16] w-full max-w-[230px] overflow-hidden rounded-[24px] border border-white/10 bg-black shadow-xl">
                     {media && item.content.mediaType.toLowerCase().includes("video") ? (
                       <video
                         src={item.content.mediaUrl ?? undefined}
@@ -657,14 +670,14 @@ export default function ContentAnalysisResultsLibrary() {
                         controls
                         preload="metadata"
                         playsInline
-                        className="h-full min-h-[180px] w-full bg-black object-contain"
+                        className="h-full w-full bg-black object-contain"
                       />
                     ) : media ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={media}
                         alt=""
-                        className="h-full min-h-[180px] w-full object-cover"
+                        className="h-full w-full bg-black object-contain"
                       />
                     ) : (
                       <ImageIcon
@@ -672,6 +685,7 @@ export default function ContentAnalysisResultsLibrary() {
                         className="text-slate-300"
                       />
                     )}
+                    </div>
                   </div>
 
                   <div className="p-5">
@@ -755,6 +769,26 @@ export default function ContentAnalysisResultsLibrary() {
                         )}
                       </div>
                     </div>
+
+                    {readyToCopy && (
+                      <div className="mt-4 rounded-2xl border border-violet-200 bg-violet-50 p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-violet-700">ข้อความพร้อมใช้ยิงแอด</p>
+                            <p className="mt-1 text-[10px] text-violet-600">คัดลอกแล้วนำไปวางใน Meta Ads Manager ได้เลย</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => copyAdText(item.id, readyToCopy)}
+                            className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-violet-600 px-3 py-2 text-xs font-bold text-white hover:bg-violet-700"
+                          >
+                            <ClipboardCopy size={14} />
+                            {copiedId === item.id ? "คัดลอกแล้ว" : "คัดลอกข้อความ"}
+                          </button>
+                        </div>
+                        <p className="mt-3 line-clamp-4 whitespace-pre-wrap text-xs leading-5 text-slate-700">{readyToCopy}</p>
+                      </div>
+                    )}
 
                     <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-slate-100">
                       <div
