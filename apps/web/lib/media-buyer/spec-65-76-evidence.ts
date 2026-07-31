@@ -5,6 +5,7 @@ import { getSpec46Evidence } from "@/lib/media-buyer/spec-46-evidence";
 import { getSpec48Evidence } from "@/lib/media-buyer/spec-48-evidence";
 import { getSpec55Evidence } from "@/lib/media-buyer/spec-55-evidence";
 import { getSpec59Evidence } from "@/lib/media-buyer/spec-59-evidence";
+import { getProductCampaignCoverage } from "@/lib/media-buyer/product-campaign-coverage";
 
 type Gap = { reason: string };
 const safe = { readOnlyEvidence: true, campaignActivated: false, realSpendUsed: false, budgetChanged: false, scheduleChanged: false };
@@ -104,13 +105,41 @@ export async function getSpec73Evidence() {
 }
 
 export async function getSpec74Evidence() {
-  const [coverage, meta] = await Promise.all([getSpec39Evidence(), getSpec59Evidence()]);
-  const eligible = coverage.productionData.eligibleProductCount;
-  const created = meta.productionData.completeMetaPausedTrees;
+  const [coverage, productCoverage, meta] = await Promise.all([
+    getSpec39Evidence(),
+    getProductCampaignCoverage(),
+    getSpec59Evidence(),
+  ]);
+  const eligibleProducts = productCoverage.coverage
+    .filter((item) => item.suitable)
+    .map((item) => ({
+      pageId: item.pageId,
+      pageName: item.pageName,
+      adAccountId: item.adAccountId,
+      productCategory: item.productCategory,
+    }));
+  const completeTrees = meta.productionData.drafts.filter(
+    (draft) => draft.complete,
+  );
+  const createdKeys = new Set(
+    completeTrees.map(
+      (draft) => `${draft.pageId}|${draft.productCategory}`,
+    ),
+  );
+  const missingProducts = eligibleProducts.filter(
+    (item) => !createdKeys.has(`${item.pageId}|${item.productCategory}`),
+  );
   const gaps: Gap[] = [];
   if (!coverage.pass) gaps.push({ reason: "ELIGIBLE_PRODUCT_COVERAGE_NOT_PROVEN" });
-  if (created < eligible) gaps.push({ reason: "ELIGIBLE_CAMPAIGN_NOT_CREATED_IN_META_PAUSED" });
-  return done(74, "Every eligible campaign is created as a complete Dark Post Campaign Tree in Meta; all objects remain PAUSED for Owner activation", { eligibleProducts: eligible, completeMetaPausedTrees: created, uncoveredProducts: coverage.productionData.uncoveredProducts }, gaps);
+  if (missingProducts.length > 0) gaps.push({ reason: "ELIGIBLE_CAMPAIGN_NOT_CREATED_IN_META_PAUSED" });
+  return done(74, "Every eligible campaign is created as a complete Dark Post Campaign Tree in Meta; all objects remain PAUSED for Owner activation", {
+    eligibleProductCount: eligibleProducts.length,
+    eligibleProducts,
+    completeMetaPausedTrees: completeTrees.length,
+    matchedEligibleTrees: eligibleProducts.length - missingProducts.length,
+    missingProducts,
+    uncoveredProducts: coverage.productionData.uncoveredProducts,
+  }, gaps);
 }
 
 export async function getSpec75Evidence() {
