@@ -1,5 +1,6 @@
 import prisma from "@/lib/prisma";
 import { buildAutonomousTargeting } from "@/lib/media-buyer/autonomous-targeting";
+import { buildCampaignDraftAds } from "@/lib/media-buyer/campaign-draft-ad-builder";
 import { metaRequest } from "@/lib/meta/client";
 import { authorizeCampaignForAutonomousPausedMeta } from "@/lib/media-buyer/autonomous-paused-authorization";
 import { buildMetaPublishPayload } from "@/lib/media-buyer/meta-publisher";
@@ -7,7 +8,7 @@ import { executeMetaPublishPlan } from "@/lib/media-buyer/meta-publish-executor"
 import { orchestrateMetaPublish } from "@/lib/media-buyer/meta-publish-orchestrator";
 
 export const AUTONOMOUS_META_PREPARER_VERSION =
-  "autonomous-meta-preparer-v1.3-ready-draft-queue";
+  "autonomous-meta-preparer-v1.4-repair-ads-before-authorization";
 
 const DEFAULT_BATCH_SIZE = 2;
 const MAX_BATCH_SIZE = 5;
@@ -78,6 +79,23 @@ function normalizedBatchSize(value?: number) {
 export async function prepareCampaignInMetaPaused(
   campaignDraftId: string,
 ) {
+  const adPreparation = await buildCampaignDraftAds({
+    campaignDraftId,
+    forceRebuild: true,
+  });
+
+  if (
+    !["CREATED", "UPDATED", "EXISTING"].includes(adPreparation.status) ||
+    !adPreparation.readyAds
+  ) {
+    return {
+      status: "SKIPPED",
+      campaignDraftId,
+      stage: "AD_PREPARATION",
+      detail: adPreparation,
+    } as const;
+  }
+
   const authorization =
     await authorizeCampaignForAutonomousPausedMeta(campaignDraftId);
 
