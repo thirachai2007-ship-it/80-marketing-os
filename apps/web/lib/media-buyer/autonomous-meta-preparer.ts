@@ -12,6 +12,64 @@ export const AUTONOMOUS_META_PREPARER_VERSION =
 const DEFAULT_BATCH_SIZE = 2;
 const MAX_BATCH_SIZE = 5;
 
+function targetingRepairCandidates(targeting: Record<string, unknown>) {
+  const {
+    geo_locations,
+    flexible_spec,
+    custom_audiences,
+    excluded_custom_audiences,
+    ...demographics
+  } = targeting;
+  const countryGeo = { countries: ["TH"] };
+  const candidates: Array<{
+    strategy: string;
+    targeting: Record<string, unknown>;
+  }> = [
+    { strategy: "FULL_EVIDENCE_PLAN", targeting },
+  ];
+
+  if (custom_audiences) {
+    return candidates;
+  }
+
+  if (geo_locations && flexible_spec) {
+    candidates.push({
+      strategy: "PROVINCES_AND_DEMOGRAPHICS",
+      targeting: {
+        geo_locations,
+        ...demographics,
+        ...(excluded_custom_audiences ? { excluded_custom_audiences } : {}),
+      },
+    });
+    candidates.push({
+      strategy: "INTERESTS_AND_DEMOGRAPHICS_NATIONWIDE",
+      targeting: {
+        geo_locations: countryGeo,
+        ...demographics,
+        flexible_spec,
+        ...(excluded_custom_audiences ? { excluded_custom_audiences } : {}),
+      },
+    });
+  }
+
+  candidates.push({
+    strategy: "DEMOGRAPHICS_NATIONWIDE",
+    targeting: {
+      geo_locations: countryGeo,
+      ...demographics,
+      ...(excluded_custom_audiences ? { excluded_custom_audiences } : {}),
+    },
+  });
+
+  return candidates.filter(
+    (candidate, index, all) =>
+      all.findIndex(
+        (item) =>
+          JSON.stringify(item.targeting) === JSON.stringify(candidate.targeting),
+      ) === index,
+  );
+}
+
 function normalizedBatchSize(value?: number) {
   if (!Number.isFinite(value)) return DEFAULT_BATCH_SIZE;
   return Math.min(Math.max(Math.trunc(value!), 1), MAX_BATCH_SIZE);
@@ -317,6 +375,7 @@ export async function refreshExistingPausedTargetingBatch(
   for (const draft of drafts) {
     const metaAdSetId = draft.metaAdSetId!;
     let attemptedTargeting: Record<string, unknown> | null = null;
+    let appliedTargetingStrategy: string | null = null;
     try {
       const metaState = await metaRequest<{
         id: string;
@@ -344,17 +403,35 @@ export async function refreshExistingPausedTargetingBatch(
       }
 
       const targetingPlan = await buildAutonomousTargeting(draft.id);
-      attemptedTargeting = targetingPlan.targeting;
-      await metaRequest<{ success?: boolean }>(
-        metaAdSetId,
-        {},
-        {
-          method: "POST",
-          body: {
-            targeting: JSON.stringify(targetingPlan.targeting),
-          },
-        },
-      );
+      const candidateErrors: string[] = [];
+      for (const candidate of targetingRepairCandidates(targetingPlan.targeting)) {
+        attemptedTargeting = candidate.targeting;
+        try {
+          await metaRequest<{ success?: boolean }>(
+            metaAdSetId,
+            {},
+            {
+              method: "POST",
+              body: {
+                targeting: JSON.stringify(candidate.targeting),
+              },
+            },
+          );
+          appliedTargetingStrategy = candidate.strategy;
+          break;
+        } catch (candidateError) {
+          candidateErrors.push(
+            `${candidate.strategy}: ${
+              candidateError instanceof Error
+                ? candidateError.message
+                : "Unknown Meta error"
+            }`,
+          );
+        }
+      }
+      if (!appliedTargetingStrategy) {
+        throw new Error(candidateErrors.join(" | "));
+      }
       await prisma.campaignDraft.update({
         where: { id: draft.id },
         data: { updatedAt: new Date() },
@@ -374,7 +451,8 @@ export async function refreshExistingPausedTargetingBatch(
           }),
           outputJson: JSON.stringify({
             metaAdSetId,
-            targeting: targetingPlan.targeting,
+            targeting: attemptedTargeting,
+            appliedTargetingStrategy,
             updated: true,
           }),
           policyJson: JSON.stringify({
@@ -392,6 +470,8 @@ export async function refreshExistingPausedTargetingBatch(
         campaignDraftId: draft.id,
         metaAdSetId,
         status: "UPDATED_PAUSED",
+        appliedTargetingStrategy,
+        targeting: attemptedTargeting,
         targetingEvidence: targetingPlan.evidence,
       });
     } catch (error) {
