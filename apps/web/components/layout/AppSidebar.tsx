@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import {
-  Beaker,
   Bot,
   Boxes,
   BrainCircuit,
@@ -12,9 +11,6 @@ import {
   ShieldCheck,
   Settings,
   Sparkles,
-  Film,
-  ListChecks,
-  ChartNoAxesCombined,
   ScrollText,
 } from "lucide-react";
 
@@ -38,9 +34,14 @@ const menuGroups: MenuGroup[] = [
     title: "OWNER",
     items: [
       {
-        title: "Approval Center",
+        title: "Owner Command Center",
         href: "/",
         icon: ShieldCheck,
+      },
+      {
+        title: "Reports & Dark Posts",
+        href: "/marketing/decision-audit",
+        icon: ScrollText,
       },
     ],
   },
@@ -48,34 +49,9 @@ const menuGroups: MenuGroup[] = [
     title: "OPERATIONS",
     items: [
       {
-        title: "Decision Audit",
-        href: "/marketing/decision-audit",
-        icon: ScrollText,
-      },
-      {
-        title: "Daily Overview",
-        href: "/marketing/daily-overview",
-        icon: ChartNoAxesCombined,
-      },
-      {
-        title: "Media Buyer Queue",
-        href: "/marketing/media-buyer-queue",
-        icon: ListChecks,
-      },
-      {
-        title: "Content Intelligence",
+        title: "Content Analysis",
         href: "/marketing/content-intelligence",
         icon: BrainCircuit,
-      },
-      {
-        title: "Ad Post Selection",
-        href: "/marketing/video-editing",
-        icon: Film,
-      },
-      {
-        title: "Experiments",
-        href: "/marketing/experiments",
-        icon: Beaker,
       },
       {
         title: "Settings",

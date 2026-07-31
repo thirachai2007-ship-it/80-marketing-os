@@ -17,8 +17,8 @@ const pageTitles: Record<
   }
 > = {
   "/": {
-    title: "Dashboard",
-    subtitle: "สวัสดีครับ พร้อมลุยธุรกิจของคุณวันนี้",
+    title: "Owner Command Center",
+    subtitle: "รายงานและ Dark Post ที่พร้อมให้คุณเปิดใน Meta",
   },
   "/marketing": {
     title: "Marketing AI",
