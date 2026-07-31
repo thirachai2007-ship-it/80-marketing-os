@@ -623,6 +623,7 @@ export async function buildMetaPublishPayload(
         select: {
           mediaUrl: true,
           thumbnailUrl: true,
+          mediaType: true,
         },
       });
 
@@ -669,13 +670,13 @@ export async function buildMetaPublishPayload(
 
     const mediaUrl =
       normalizeText(
-        revision?.mediaUrl,
+        content?.mediaUrl,
       ) ||
       normalizeText(
         asset?.originalMediaUrl,
       ) ||
       normalizeText(
-        content?.mediaUrl,
+        revision?.mediaUrl,
       );
 
     if (!mediaUrl) {
@@ -740,8 +741,12 @@ export async function buildMetaPublishPayload(
       mediaUrl,
 
       mimeType:
-        revision?.mimeType ??
-        null,
+        content?.mediaType?.toUpperCase().includes("VIDEO")
+          ? "video/mp4"
+          : content?.mediaType?.toUpperCase().includes("IMAGE") ||
+              content?.mediaType?.toUpperCase().includes("PHOTO")
+            ? "image/jpeg"
+            : revision?.mimeType ?? null,
     });
   }
 
