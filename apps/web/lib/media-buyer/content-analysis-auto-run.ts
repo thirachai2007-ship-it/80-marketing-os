@@ -6,11 +6,12 @@ import {
 } from "@/lib/media-buyer/content-analysis-coverage";
 
 export const CONTENT_ANALYSIS_AUTO_RUN_VERSION =
-  "content-analysis-auto-run-scheduler-v2";
+  "content-analysis-auto-run-scheduler-v3";
 
 const SUPPORTED_STORED_SCHEDULER_VERSIONS =
   new Set([
     "content-analysis-auto-run-scheduler-v1",
+    "content-analysis-auto-run-scheduler-v2",
     CONTENT_ANALYSIS_AUTO_RUN_VERSION,
   ]);
 
@@ -1146,12 +1147,12 @@ export async function tickContentAnalysisAutoRun(
       worker?.requeued ?? 0;
     const skipped =
       worker?.skipped ?? 0;
+    // Only terminal work counts as progress. A failed or requeued item is
+    // still outstanding, but it must not pause a productive batch. Cron can
+    // therefore keep consuming the queue every two minutes while the
+    // zero-progress guard still stops repeated all-retry/all-failure loops.
     const madeProgress =
-      completed +
-        failed +
-        requeued +
-        skipped >
-      0;
+      completed + skipped > 0;
     const zeroProgressTicks =
       madeProgress
         ? 0
@@ -1228,10 +1229,8 @@ export async function tickContentAnalysisAutoRun(
     const noWork =
       result.status === "NO_WORK";
     const shouldPause =
-      failed > 0 ||
-      requeued > 0 ||
       zeroProgressTicks >=
-        MAX_ZERO_PROGRESS_TICKS;
+      MAX_ZERO_PROGRESS_TICKS;
 
     let normalStatus: AutoRunStatus =
       "ACTIVE";
@@ -1242,11 +1241,7 @@ export async function tickContentAnalysisAutoRun(
     if (shouldPause) {
       normalStatus = "PAUSED";
       normalStopReason =
-        failed > 0
-          ? "BATCH_REQUIRES_REVIEW"
-          : requeued > 0
-            ? "BATCH_REQUEUED_REVIEW"
-            : "NO_PROGRESS_GUARD";
+        "NO_PROGRESS_GUARD";
     } else if (approvedLimitReached) {
       normalStatus = "COMPLETED";
       normalStopReason =
