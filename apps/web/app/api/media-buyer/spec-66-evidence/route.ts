@@ -1,0 +1,2 @@
+import { NextResponse } from "next/server"; import { getSpec66Evidence as evidence } from "@/lib/media-buyer/spec-65-76-evidence";
+export const runtime="nodejs"; export const dynamic="force-dynamic"; export async function GET(){try{return NextResponse.json({ok:true,...await evidence()});}catch(error){return NextResponse.json({ok:false,status:"NOT_PROVEN",pass:false,error:error instanceof Error?error.message:"Spec 66 failed"},{status:500});}}
