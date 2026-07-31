@@ -88,7 +88,9 @@ export async function getSpec58Evidence() {
     video.sourceLinkedDrafts.some(
       (ad) =>
         ad.sourceUsedWithoutEditedRevision &&
-        ["DARK_POST", "USE_EXISTING_POST"].includes(ad.creativeMode),
+        ["DARK_POST", "EXISTING_POST", "USE_EXISTING_POST"].includes(
+          ad.creativeMode,
+        ),
     ),
   );
   const previewableVideos = selectableVideos.filter((video) =>
