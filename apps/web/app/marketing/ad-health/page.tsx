@@ -47,7 +47,8 @@ export default async function AdHealthPage({ searchParams }: { searchParams: Pro
       {ads.map((ad) => {
         const r = ad.recommendation;
         const media = ad.preview?.mediaUrl ?? ad.preview?.thumbnailUrl;
-        const isVideo = ad.preview?.mediaType.toLowerCase().includes("video");
+        const isVideo = ad.preview?.mediaType?.toLowerCase().includes("video");
+        const adsManagerUrl = `https://www.facebook.com/adsmanager/manage/ads?act=${encodeURIComponent(ad.adAccountId.replace(/^act_/, ""))}&selected_ad_ids=${encodeURIComponent(ad.id)}`;
         const originalMedia = ad.preview?.analysis?.id
           ? `/api/media-buyer/content-analysis-results/${ad.preview.analysis.id}/original-media`
           : ad.preview?.mediaUrl;
@@ -68,6 +69,9 @@ export default async function AdHealthPage({ searchParams }: { searchParams: Pro
               <div><dt className="font-bold text-violet-700">Ad</dt><dd className="mt-0.5 font-semibold text-slate-950">{ad.name}</dd></div>
               <div><dt className="font-bold text-slate-500">บัญชีโฆษณา</dt><dd className="mt-0.5 text-slate-600">{ad.adAccountId}</dd></div>
             </dl>
+            <a href={adsManagerUrl} target="_blank" rel="noreferrer" className="flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700">
+              <ExternalLink size={16}/> เปิด Ad นี้ใน Meta Ads Manager
+            </a>
             {ad.preview?.message && <p className="line-clamp-4 rounded-2xl bg-slate-50 p-3 text-[11px] leading-5 text-slate-600">{ad.preview.message}</p>}
             <div className="grid grid-cols-3 gap-2 text-center text-xs"><div><p className="text-slate-400">ใช้จ่าย</p><b>{baht(ad.performance.spendSatang)}</b></div><div><p className="text-slate-400">ROAS</p><b>{r.roas?.toFixed(2) ?? 'ไม่มีข้อมูล'}</b></div><div><p className="text-slate-400">ต่อแชท</p><b>{r.costPerMessageSatang === null ? '-' : baht(r.costPerMessageSatang)}</b></div><div><p className="text-slate-400">CTR</p><b>{r.ctr === null ? '-' : `${r.ctr.toFixed(2)}%`}</b></div><div><p className="text-slate-400">ความถี่</p><b>{ad.performance.frequency?.toFixed(2) ?? '-'}</b></div><div><p className="text-slate-400">แชท</p><b>{ad.performance.messages}</b></div></div>
             <div className={`rounded-2xl border p-4 text-xs leading-5 ${tone[r.status]}`}><p className="flex items-center gap-2 font-bold"><TriangleAlert size={15}/>เหตุผล</p><p className="mt-1">{r.reason}</p><p className="mt-2"><strong>สิ่งที่ Owner ควรทำ:</strong> {r.nextAction}</p></div>
