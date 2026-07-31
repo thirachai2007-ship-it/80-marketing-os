@@ -1,6 +1,7 @@
 import AppShell from "@/components/layout/AppShell";
 import AdHealthFilters from "@/components/marketing/AdHealthFilters";
 import { getAdPerformanceReport } from "@/lib/media-buyer/ad-performance-report";
+import prisma from "@/lib/prisma";
 import { ExternalLink, ImageIcon, ShieldCheck, Target, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 
@@ -19,10 +20,17 @@ const tone = {
 
 export default async function AdHealthPage({ searchParams }: { searchParams: Promise<{ page?: string; account?: string; status?: string }> }) {
   const selected = await searchParams;
-  const activeAds = (await getAdPerformanceReport(30)).filter((ad) =>
+  const [report, managedPages] = await Promise.all([
+    getAdPerformanceReport(30),
+    prisma.managedPage.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }).catch(() => []),
+  ]);
+  const activeAds = report.filter((ad) =>
     ad.effectiveStatus === "ACTIVE" && ad.adSet.effectiveStatus === "ACTIVE" && ad.campaign.effectiveStatus === "ACTIVE"
   );
-  const pageOptions = Array.from(new Map(activeAds.flatMap((ad) => ad.preview ? [[ad.preview.pageId, ad.preview.pageName] as const] : [])).entries()).map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label, "th"));
+  const pageOptions = Array.from(new Map([
+    ...managedPages.map((page) => [page.id, page.name] as const),
+    ...activeAds.flatMap((ad) => ad.preview?.pageId ? [[ad.preview.pageId, ad.preview.pageName] as const] : []),
+  ]).entries()).map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label, "th"));
   const accountOptions = Array.from(new Map(activeAds.map((ad) => [ad.adAccountId, `${ad.adAccount.name} (${ad.adAccountId})`] as const)).entries()).map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label, "th"));
   const filteredBySource = activeAds.filter((ad) =>
     (!selected.page || ad.preview?.pageId === selected.page) &&
