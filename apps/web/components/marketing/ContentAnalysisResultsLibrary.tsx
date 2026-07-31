@@ -184,13 +184,14 @@ function scoreClass(score: number) {
 
 function textArray(
   values: unknown[],
+  limit = 3,
 ) {
   return values
     .filter(
       (value): value is string =>
         typeof value === "string",
     )
-    .slice(0, 3);
+    .slice(0, limit);
 }
 
 export default function ContentAnalysisResultsLibrary() {
@@ -421,6 +422,27 @@ export default function ContentAnalysisResultsLibrary() {
         ))}
       </section>
 
+      <section className="mt-5 grid gap-4 lg:grid-cols-3">
+        <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
+          <p className="text-xs font-bold text-blue-950">คะแนนนี้ใช้ทำอะไร</p>
+          <p className="mt-2 text-[11px] leading-5 text-blue-800">
+            เป็นคะแนนคัดกรองจาก AI เพื่อจัดลำดับโพสต์สำหรับทดสอบ ไม่ใช่คำรับรองว่าโพสต์จะขายดีหรือได้ ROAS ตามเป้า
+          </p>
+        </div>
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+          <p className="text-xs font-bold text-amber-950">เกณฑ์อ่านคะแนนปรับเทียบ</p>
+          <p className="mt-2 text-[11px] leading-5 text-amber-800">
+            80+ เด่นและควรทดสอบ · 75–79 น่าทดสอบ · 60–74 ใช้เป็นตัวเลือกรอง · ต่ำกว่า 60 ไม่ควรเลือกโดยอัตโนมัติ
+          </p>
+        </div>
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
+          <p className="text-xs font-bold text-rose-950">ความน่าเชื่อถือ</p>
+          <p className="mt-2 text-[11px] leading-5 text-rose-800">
+            ตอนนี้เป็น AI_ONLY ความน่าเชื่อถือเชิงคัดกรองเท่านั้น ต้องใช้ผลจริงจาก Meta เช่น ค่าแชทและ ROAS เพื่อยืนยัน
+          </p>
+        </div>
+      </section>
+
       <section className="mt-5 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex items-center gap-2 text-sm font-bold text-slate-900">
           <Filter size={17} />
@@ -590,6 +612,11 @@ export default function ContentAnalysisResultsLibrary() {
             const reasons =
               textArray(
                 item.analysis.reasons,
+              );
+            const weaknesses =
+              textArray(
+                item.analysis.weaknesses,
+                6,
               );
 
             return (
@@ -762,7 +789,7 @@ export default function ContentAnalysisResultsLibrary() {
                     </div>
 
                     {expanded && (
-                      <div className="mt-5 grid gap-4 border-t border-slate-100 pt-5 lg:grid-cols-2">
+                      <div className="mt-5 grid gap-4 border-t border-slate-100 pt-5 lg:grid-cols-3">
                         <div className="rounded-2xl bg-slate-50 p-4">
                           <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">
                             สรุปจาก AI
@@ -795,6 +822,35 @@ export default function ContentAnalysisResultsLibrary() {
                               )}
                             </ul>
                           )}
+                        </div>
+
+                        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
+                          <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-rose-700">
+                            <TriangleAlert size={14} />
+                            ข้อเสียและเหตุผลที่ถูกหักคะแนน
+                          </p>
+                          {weaknesses.length > 0 ? (
+                            <ul className="mt-3 space-y-2 text-[11px] leading-5 text-rose-900">
+                              {weaknesses.map((weakness, index) => (
+                                <li
+                                  key={`${weakness}-${index}`}
+                                  className="flex gap-2"
+                                >
+                                  <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-rose-500" />
+                                  <span>{weakness}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="mt-3 text-xs leading-5 text-rose-800">
+                              AI ไม่ได้ระบุข้อเสียไว้ รายการนี้จึงยังไม่ควรถูกเชื่อถือว่าไม่มีจุดอ่อน
+                            </p>
+                          )}
+                          <div className="mt-3 border-t border-rose-200 pt-3 text-[10px] leading-5 text-rose-700">
+                            คะแนนปรับเทียบ {item.analysis.calibration.score} · AI ดิบ{" "}
+                            {item.analysis.calibration.rawAiScore} · หลักฐาน{" "}
+                            {item.analysis.calibration.evidence}
+                          </div>
                         </div>
 
                         <div className="rounded-2xl bg-teal-50 p-4">
