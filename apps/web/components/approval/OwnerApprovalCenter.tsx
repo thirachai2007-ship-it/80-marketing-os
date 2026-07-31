@@ -305,6 +305,30 @@ export default function OwnerApprovalCenter() {
     setError("");
     setMetaPreparationMessage("");
     try {
+      const targetingResponse = await fetch(
+        "/api/media-buyer/autonomous-meta-preparer",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mode: "REFRESH_EXISTING_PAUSED_TARGETING",
+            batchSize: 5,
+          }),
+        },
+      );
+      const targetingResult = (await targetingResponse.json()) as {
+        ok: boolean;
+        updated?: number;
+        failed?: number;
+        error?: string;
+      };
+      if (!targetingResponse.ok || !targetingResult.ok) {
+        throw new Error(
+          targetingResult.error ||
+            `ซ่อม Targeting ไม่สำเร็จ ${targetingResult.failed ?? 0} รายการ`,
+        );
+      }
+
       const response = await fetch(
         "/api/media-buyer/autonomous-meta-preparer",
         { method: "POST" },
@@ -320,8 +344,8 @@ export default function OwnerApprovalCenter() {
       }
       setMetaPreparationMessage(
         result.completed
-          ? `สร้างใน Meta แบบ PAUSED สำเร็จ ${result.completed} แคมเปญ`
-          : "ไม่มีแคมเปญที่ต้องสร้างเพิ่มใน Meta",
+          ? `ซ่อม Targeting ${targetingResult.updated ?? 0} Ad Set และสร้างใน Meta แบบ PAUSED สำเร็จ ${result.completed} แคมเปญ`
+          : `ซ่อม Targeting ${targetingResult.updated ?? 0} Ad Set · ไม่มีแคมเปญที่ต้องสร้างเพิ่มใน Meta`,
       );
       await load();
     } catch (prepareError) {
@@ -384,7 +408,7 @@ export default function OwnerApprovalCenter() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="font-semibold text-cyan-950">Autonomous Meta Preparation</p>
-            <p className="mt-1 text-sm text-cyan-800">Cron ทำงานอัตโนมัติ ปุ่มนี้ใช้ตรวจหรือสั่งทำทันที ทุก Object จะเป็น PAUSED</p>
+            <p className="mt-1 text-sm text-cyan-800">Cron ทำงานอัตโนมัติ ปุ่มนี้ซ่อม Targeting เดิมและเตรียมแคมเปญใหม่ทันที ทุก Object จะเป็น PAUSED</p>
           </div>
           <button
             type="button"
@@ -392,7 +416,7 @@ export default function OwnerApprovalCenter() {
             onClick={() => void prepareMetaPaused()}
             className="rounded-xl bg-cyan-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
           >
-            {preparingMeta ? "กำลังเตรียมใน Meta..." : "เตรียมใน Meta ตอนนี้"}
+            {preparingMeta ? "กำลังซ่อมและเตรียม Meta..." : "ซ่อม Targeting และเตรียม Meta"}
           </button>
         </div>
         {metaPreparationMessage && (
