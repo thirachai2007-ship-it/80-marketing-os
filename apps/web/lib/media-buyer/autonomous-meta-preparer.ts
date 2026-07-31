@@ -1,11 +1,13 @@
 import prisma from "@/lib/prisma";
+import { buildAutonomousTargeting } from "@/lib/media-buyer/autonomous-targeting";
+import { metaRequest } from "@/lib/meta/client";
 import { authorizeCampaignForAutonomousPausedMeta } from "@/lib/media-buyer/autonomous-paused-authorization";
 import { buildMetaPublishPayload } from "@/lib/media-buyer/meta-publisher";
 import { executeMetaPublishPlan } from "@/lib/media-buyer/meta-publish-executor";
 import { orchestrateMetaPublish } from "@/lib/media-buyer/meta-publish-orchestrator";
 
 export const AUTONOMOUS_META_PREPARER_VERSION =
-  "autonomous-meta-preparer-v1.1";
+  "autonomous-meta-preparer-v1.2-audience-targeting";
 
 const DEFAULT_BATCH_SIZE = 2;
 const MAX_BATCH_SIZE = 5;
@@ -142,13 +144,33 @@ export async function prepareCampaignInMetaPaused(
     } as const;
   }
 
-  const targeting = {
-    geo_locations: {
-      countries: ["TH"],
+  const targetingPlan =
+    await buildAutonomousTargeting(campaignDraftId);
+  const targeting =
+    targetingPlan.targeting;
+
+  await prisma.decisionLog.create({
+    data: {
+      campaignDraftId,
+      decisionType: "AUTONOMOUS_AUDIENCE_TARGETING",
+      action: "APPLY_EVIDENCE_BASED_TARGETING",
+      reason:
+        targetingPlan.evidence.strategy === "BROAD_FALLBACK"
+          ? "ไม่พบ Meta Audience ID หรือ Targeting ID ที่ยืนยันได้ จึงใช้ Broad ประเทศไทยอย่างโปร่งใส"
+          : "นำ Audience Plan และ Audience Asset ที่ยืนยันได้มาใช้กับ Ad Set ก่อนสร้างใน Meta",
+      confidence: 100,
+      inputJson: JSON.stringify(targetingPlan.evidence),
+      outputJson: JSON.stringify({ targeting }),
+      policyJson: JSON.stringify({
+        verifiedMetaIdsOnly: true,
+        fakeLookalikeForbidden: true,
+        fakeRetargetingForbidden: true,
+        broadFallbackAllowed: true,
+        allMetaObjectsPaused: true,
+      }),
+      policyReference: "Master Spec 53-55, 70-72, 74, 77",
     },
-    age_min: 20,
-    age_max: 65,
-  };
+  });
 
   const result = await orchestrateMetaPublish({
     campaignDraftId,
@@ -173,6 +195,7 @@ export async function prepareCampaignInMetaPaused(
     campaignDraftId,
     stage: "META_PAUSED_TREE",
     detail: result,
+    targetingEvidence: targetingPlan.evidence,
   } as const;
 }
 
@@ -263,6 +286,135 @@ export async function runAutonomousMetaPreparationBatch(
       campaignActivationAllowed: false,
       budgetMutationAllowed: false,
       scheduleMutationAllowed: false,
+    },
+  };
+}
+
+export async function refreshExistingPausedTargetingBatch(
+  options: { batchSize?: number } = {},
+) {
+  const drafts = await prisma.campaignDraft.findMany({
+    where: {
+      metaAdSetId: { not: null },
+      createdInMetaAt: { not: null },
+      decisions: {
+        none: {
+          decisionType: "AUTONOMOUS_AUDIENCE_TARGETING",
+          action: "REFRESH_EXISTING_PAUSED_ADSET_TARGETING",
+        },
+      },
+    },
+    orderBy: { updatedAt: "asc" },
+    take: normalizedBatchSize(options.batchSize),
+    select: {
+      id: true,
+      metaAdSetId: true,
+    },
+  });
+
+  const results: Array<Record<string, unknown>> = [];
+
+  for (const draft of drafts) {
+    const metaAdSetId = draft.metaAdSetId!;
+    try {
+      const metaState = await metaRequest<{
+        id: string;
+        status?: string;
+        effective_status?: string;
+      }>(metaAdSetId, {
+        fields: "id,status,effective_status",
+      });
+      const isPaused =
+        metaState.status === "PAUSED" &&
+        (!metaState.effective_status ||
+          ["PAUSED", "CAMPAIGN_PAUSED", "ADSET_PAUSED"].includes(
+            metaState.effective_status,
+          ));
+
+      if (!isPaused) {
+        results.push({
+          campaignDraftId: draft.id,
+          metaAdSetId,
+          status: "SKIPPED_NOT_PAUSED",
+          metaStatus: metaState.status,
+          effectiveStatus: metaState.effective_status,
+        });
+        continue;
+      }
+
+      const targetingPlan = await buildAutonomousTargeting(draft.id);
+      await metaRequest<{ success?: boolean }>(
+        metaAdSetId,
+        {},
+        {
+          method: "POST",
+          body: {
+            targeting: JSON.stringify(targetingPlan.targeting),
+          },
+        },
+      );
+      await prisma.campaignDraft.update({
+        where: { id: draft.id },
+        data: { updatedAt: new Date() },
+      });
+
+      await prisma.decisionLog.create({
+        data: {
+          campaignDraftId: draft.id,
+          decisionType: "AUTONOMOUS_AUDIENCE_TARGETING",
+          action: "REFRESH_EXISTING_PAUSED_ADSET_TARGETING",
+          reason: "ปรับ Targeting ของ Ad Set เดิมหลังตรวจจาก Meta แล้วว่าเป็น PAUSED",
+          confidence: 100,
+          inputJson: JSON.stringify({
+            metaAdSetId,
+            before: metaState,
+            evidence: targetingPlan.evidence,
+          }),
+          outputJson: JSON.stringify({
+            metaAdSetId,
+            targeting: targetingPlan.targeting,
+            updated: true,
+          }),
+          policyJson: JSON.stringify({
+            pausedOnly: true,
+            activationForbidden: true,
+            spendForbidden: true,
+            budgetMutationForbidden: true,
+            scheduleMutationForbidden: true,
+          }),
+          policyReference: "Master Spec 53-55, 70-72, 74, 77",
+        },
+      });
+
+      results.push({
+        campaignDraftId: draft.id,
+        metaAdSetId,
+        status: "UPDATED_PAUSED",
+        targetingEvidence: targetingPlan.evidence,
+      });
+    } catch (error) {
+      results.push({
+        campaignDraftId: draft.id,
+        metaAdSetId,
+        status: "FAILED",
+        error: error instanceof Error ? error.message : "Unknown targeting refresh error",
+      });
+    }
+  }
+
+  return {
+    preparerVersion: AUTONOMOUS_META_PREPARER_VERSION,
+    scanned: drafts.length,
+    updated: results.filter((item) => item.status === "UPDATED_PAUSED").length,
+    skipped: results.filter((item) => item.status === "SKIPPED_NOT_PAUSED").length,
+    failed: results.filter((item) => item.status === "FAILED").length,
+    results,
+    safety: {
+      pausedOnly: true,
+      campaignActivationAllowed: false,
+      realSpendUsed: false,
+      budgetChanged: false,
+      scheduleChanged: false,
     },
   };
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import {
   AUTONOMOUS_META_PREPARER_VERSION,
+  refreshExistingPausedTargetingBatch,
   runAutonomousMetaPreparationBatch,
 } from "@/lib/media-buyer/autonomous-meta-preparer";
 import { hasValidOwnerSession, isSameOriginRequest } from "@/lib/owner-session";
@@ -33,7 +34,18 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const result = await runAutonomousMetaPreparationBatch({ batchSize: 2 });
+    const body = await request.json().catch(() => ({})) as {
+      mode?: unknown;
+      batchSize?: unknown;
+    };
+    const batchSize =
+      typeof body.batchSize === "number"
+        ? body.batchSize
+        : 2;
+    const result =
+      body.mode === "REFRESH_EXISTING_PAUSED_TARGETING"
+        ? await refreshExistingPausedTargetingBatch({ batchSize })
+        : await runAutonomousMetaPreparationBatch({ batchSize });
     return NextResponse.json({ ok: result.failed === 0, ...result });
   } catch (error) {
     return NextResponse.json(
