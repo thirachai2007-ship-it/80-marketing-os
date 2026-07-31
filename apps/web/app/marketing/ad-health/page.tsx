@@ -16,7 +16,11 @@ const tone = {
 };
 
 export default async function AdHealthPage() {
-  const ads = await getAdPerformanceReport(30);
+  const ads = (await getAdPerformanceReport(30)).filter((ad) =>
+    ad.effectiveStatus === "ACTIVE" &&
+    ad.adSet.effectiveStatus === "ACTIVE" &&
+    ad.campaign.effectiveStatus === "ACTIVE"
+  );
   const counts = ads.reduce<Record<string, number>>((sum, ad) => {
     sum[ad.recommendation.status] = (sum[ad.recommendation.status] ?? 0) + 1;
     return sum;
@@ -26,7 +30,7 @@ export default async function AdHealthPage() {
     <section>
       <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-teal-600">รายงานรายวัน · Meta READ-ONLY</p>
       <h1 className="heading-font mt-2 text-3xl font-bold text-slate-950">AI ตรวจคุณภาพโฆษณาทีละตัว</h1>
-      <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-500">วิเคราะห์ข้อมูลย้อนหลัง 30 วันจากทุกบัญชีที่เชื่อมต่อ แล้วแยกว่าแอดใดควรไปต่อ ควรปรับปรุง หรือควรพิจารณาหยุด พร้อมเหตุผล ระบบไม่แก้ไขโฆษณาให้เอง</p>
+      <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-500">แสดงเฉพาะ Campaign, Ad Set และ Ad ที่มีสถานะ ACTIVE พร้อมวิเคราะห์ข้อมูลย้อนหลัง 30 วันว่าแอดใดควรไปต่อ ควรปรับปรุง หรือควรพิจารณาหยุด ระบบไม่แก้ไขโฆษณาให้เอง</p>
     </section>
     <div className="grid gap-3 sm:grid-cols-4">
       {[['CONTINUE','ควรไปต่อ'],['IMPROVE','ควรปรับปรุง'],['CONSIDER_STOP','พิจารณาหยุด'],['COLLECT_DATA','เก็บข้อมูลต่อ']].map(([key,label]) => <div key={key} className={`rounded-2xl border p-4 ${tone[key as keyof typeof tone]}`}><p className="text-xs font-bold">{label}</p><p className="mt-1 text-2xl font-black">{counts[key] ?? 0}</p></div>)}
@@ -43,7 +47,7 @@ export default async function AdHealthPage() {
           <div className={`mt-4 rounded-2xl border p-4 text-xs leading-6 ${tone[r.status]}`}><p className="flex items-center gap-2 font-bold"><TriangleAlert size={15}/>เหตุผล</p><p>{r.reason}</p><p className="mt-2"><strong>สิ่งที่ Owner ควรทำ:</strong> {r.nextAction}</p></div>
         </article>;
       })}
-      {ads.length === 0 && <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-12 text-center text-sm text-slate-500">ยังไม่มีข้อมูลระดับโฆษณาจาก Meta ให้ประเมิน</div>}
+      {ads.length === 0 && <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-12 text-center text-sm text-slate-500">ขณะนี้ไม่มี Campaign ที่ ACTIVE ครบทั้ง Campaign, Ad Set และ Ad</div>}
     </section>
     <div className="flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-xs text-emerald-800"><ShieldCheck size={18}/>ระบบนี้อ่านและวิเคราะห์เท่านั้น ไม่หยุด ไม่เปิด และไม่แก้ไขโฆษณาใน Meta</div>
   </div></AppShell>;
