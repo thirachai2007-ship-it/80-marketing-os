@@ -255,6 +255,7 @@ export default function ContentAnalysisResultsLibrary() {
     poster: string | null;
     isVideo: boolean;
     title: string;
+    permalinkUrl: string | null;
   } | null>(null);
   const [fitMedia, setFitMedia] = useState(false);
   const previewVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -719,7 +720,7 @@ export default function ContentAnalysisResultsLibrary() {
                     <button
                       type="button"
                       disabled={!fullMedia}
-                      onClick={() => fullMedia && (setFitMedia(false), setSoundEnabled(false), setMediaPreview({ src: originalMedia, poster: item.content.thumbnailUrl, isVideo, title: item.content.pageName }))}
+                      onClick={() => fullMedia && (setFitMedia(false), setSoundEnabled(false), setMediaPreview({ src: originalMedia, poster: item.content.thumbnailUrl, isVideo, title: item.content.pageName, permalinkUrl: item.content.permalinkUrl }))}
                       className="group relative aspect-[9/16] w-full max-w-[230px] overflow-hidden rounded-[24px] border border-white/10 bg-black shadow-xl disabled:cursor-default"
                       title="เปิดดูไฟล์ต้นฉบับขนาดใหญ่"
                     >
@@ -1188,11 +1189,19 @@ export default function ContentAnalysisResultsLibrary() {
           <div className="absolute left-4 top-4 z-10 flex gap-2">
             <button type="button" onClick={(event) => { event.stopPropagation(); setFitMedia(false); }} className={`rounded-full px-4 py-2 text-xs font-bold shadow-xl ${!fitMedia ? "bg-cyan-500 text-white" : "bg-white text-slate-900"}`}>ขนาดจริง 100%</button>
             <button type="button" onClick={(event) => { event.stopPropagation(); setFitMedia(true); }} className={`rounded-full px-4 py-2 text-xs font-bold shadow-xl ${fitMedia ? "bg-cyan-500 text-white" : "bg-white text-slate-900"}`}>พอดีหน้าจอ</button>
-            {mediaPreview.isVideo && <button type="button" onClick={(event) => { event.stopPropagation(); enablePreviewSound(); }} className={`rounded-full px-4 py-2 text-xs font-bold shadow-xl ${soundEnabled ? "bg-emerald-500 text-white" : "bg-white text-slate-900"}`}>{soundEnabled ? "เปิดเสียงแล้ว 100%" : "เปิดเสียง"}</button>}
+            {mediaPreview.isVideo && !mediaPreview.permalinkUrl && <button type="button" onClick={(event) => { event.stopPropagation(); enablePreviewSound(); }} className={`rounded-full px-4 py-2 text-xs font-bold shadow-xl ${soundEnabled ? "bg-emerald-500 text-white" : "bg-white text-slate-900"}`}>{soundEnabled ? "เปิดเสียงแล้ว 100%" : "เปิดเสียง"}</button>}
           </div>
           <button type="button" onClick={() => setMediaPreview(null)} className="absolute right-4 top-4 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white text-slate-950 shadow-xl" aria-label="ปิดพรีวิว"><X size={22}/></button>
           <div className={`h-full w-full overflow-auto ${fitMedia ? "flex items-center justify-center" : "block text-center"}`} onClick={(event) => event.stopPropagation()}>
-            {mediaPreview.isVideo ? (
+            {mediaPreview.isVideo && mediaPreview.permalinkUrl ? (
+              <iframe
+                title={`วิดีโอต้นฉบับ ${mediaPreview.title}`}
+                src={`https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(mediaPreview.permalinkUrl)}&show_text=false&autoplay=false`}
+                allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
+                allowFullScreen
+                className={fitMedia ? "h-full max-h-[90vh] w-full max-w-[520px] border-0 bg-black shadow-2xl" : "inline-block h-[90vh] w-[50.625vh] max-w-[90vw] border-0 bg-black shadow-2xl"}
+              />
+            ) : mediaPreview.isVideo ? (
               <video ref={previewVideoRef} src={mediaPreview.src} poster={mediaPreview.poster ?? undefined} controls playsInline preload="metadata" onVolumeChange={(event) => setSoundEnabled(!event.currentTarget.muted && event.currentTarget.volume > 0)} className={fitMedia ? "max-h-full max-w-full bg-black object-contain shadow-2xl" : "inline-block h-auto max-w-none bg-black shadow-2xl"} />
             ) : (
               // eslint-disable-next-line @next/next/no-img-element

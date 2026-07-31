@@ -45,7 +45,7 @@ export default async function AdHealthPage() {
         return <article key={ad.id} className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
           <div className="bg-slate-950 p-4">
             <div className="mx-auto aspect-[9/16] w-full max-w-[270px] overflow-hidden rounded-[26px] border border-white/10 bg-black shadow-2xl">
-              {media && isVideo ? <video src={originalMedia ?? undefined} poster={ad.preview?.thumbnailUrl ?? undefined} controls playsInline preload="metadata" className="h-full w-full object-contain"/> : media ? (
+              {media && isVideo && ad.preview?.permalinkUrl ? <iframe title={`วิดีโอต้นฉบับ ${ad.name}`} src={`https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(ad.preview.permalinkUrl)}&show_text=false&autoplay=false`} allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share" allowFullScreen className="h-full w-full border-0 bg-black"/> : media && isVideo ? <video src={originalMedia ?? undefined} poster={ad.preview?.thumbnailUrl ?? undefined} controls playsInline preload="metadata" className="h-full w-full object-contain"/> : media ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={media} alt={`พรีวิว ${ad.name}`} className="h-full w-full object-contain"/>
               ) : <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center text-xs text-slate-400"><ImageIcon size={36}/><span>ไม่มีพรีวิวครีเอทีฟจาก Meta สำหรับแอดนี้</span></div>}
