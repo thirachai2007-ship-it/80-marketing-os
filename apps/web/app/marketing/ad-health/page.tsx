@@ -39,10 +39,13 @@ export default async function AdHealthPage() {
         const r = ad.recommendation;
         const media = ad.preview?.mediaUrl ?? ad.preview?.thumbnailUrl;
         const isVideo = ad.preview?.mediaType.toLowerCase().includes("video");
+        const originalMedia = ad.preview?.analysis?.id
+          ? `/api/media-buyer/content-analysis-results/${ad.preview.analysis.id}/original-media`
+          : ad.preview?.mediaUrl;
         return <article key={ad.id} className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
           <div className="bg-slate-950 p-4">
             <div className="mx-auto aspect-[9/16] w-full max-w-[270px] overflow-hidden rounded-[26px] border border-white/10 bg-black shadow-2xl">
-              {media && isVideo ? <video src={ad.preview?.mediaUrl ?? undefined} poster={ad.preview?.thumbnailUrl ?? undefined} controls playsInline preload="metadata" className="h-full w-full object-contain"/> : media ? (
+              {media && isVideo ? <video src={originalMedia ?? undefined} poster={ad.preview?.thumbnailUrl ?? undefined} controls playsInline preload="metadata" className="h-full w-full object-contain"/> : media ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={media} alt={`พรีวิว ${ad.name}`} className="h-full w-full object-contain"/>
               ) : <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center text-xs text-slate-400"><ImageIcon size={36}/><span>ไม่มีพรีวิวครีเอทีฟจาก Meta สำหรับแอดนี้</span></div>}
