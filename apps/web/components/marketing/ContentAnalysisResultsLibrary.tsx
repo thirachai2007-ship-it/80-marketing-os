@@ -230,8 +230,6 @@ export default function ContentAnalysisResultsLibrary() {
     useState("");
   const [queryInput, setQueryInput] =
     useState("");
-  const [query, setQuery] =
-    useState("");
   const [pageId, setPageId] =
     useState("");
   const [
@@ -245,6 +243,14 @@ export default function ContentAnalysisResultsLibrary() {
   const [minScore, setMinScore] =
     useState("0");
   const [mediaKind, setMediaKind] = useState("");
+  const [appliedFilters, setAppliedFilters] = useState({
+    query: "",
+    pageId: "",
+    productCategory: "",
+    recommendation: "",
+    minScore: "0",
+    mediaKind: "",
+  });
   const [page, setPage] =
     useState(1);
   const [expandedId, setExpandedId] =
@@ -261,6 +267,7 @@ export default function ContentAnalysisResultsLibrary() {
   const [fitMedia, setFitMedia] = useState(false);
   const previewVideoRef = useRef<HTMLVideoElement | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(false);
+  const latestRequestRef = useRef(0);
 
   const enablePreviewSound = useCallback(() => {
     const video = previewVideoRef.current;
@@ -295,41 +302,38 @@ export default function ContentAnalysisResultsLibrary() {
       new URLSearchParams({
         page: String(page),
         pageSize: "20",
-        minScore,
+        minScore: appliedFilters.minScore,
       });
 
-    if (query) {
-      params.set("query", query);
+    if (appliedFilters.query) {
+      params.set("query", appliedFilters.query);
     }
-    if (pageId) {
-      params.set("pageId", pageId);
+    if (appliedFilters.pageId) {
+      params.set("pageId", appliedFilters.pageId);
     }
-    if (productCategory) {
+    if (appliedFilters.productCategory) {
       params.set(
         "productCategory",
-        productCategory,
+        appliedFilters.productCategory,
       );
     }
-    if (recommendation) {
+    if (appliedFilters.recommendation) {
       params.set(
         "recommendation",
-        recommendation,
+        appliedFilters.recommendation,
       );
     }
-    if (mediaKind) params.set("mediaKind", mediaKind);
+    if (appliedFilters.mediaKind) params.set("mediaKind", appliedFilters.mediaKind);
 
     return `/api/media-buyer/content-analysis-results?${params.toString()}`;
   }, [
-    minScore,
-    mediaKind,
+    appliedFilters,
     page,
-    pageId,
-    productCategory,
-    query,
-    recommendation,
   ]);
 
   const load = useCallback(async () => {
+    const requestId = latestRequestRef.current + 1;
+    latestRequestRef.current = requestId;
     setLoading(true);
     setError("");
 
@@ -350,15 +354,15 @@ export default function ContentAnalysisResultsLibrary() {
         );
       }
 
-      setData(result);
+      if (latestRequestRef.current === requestId) setData(result);
     } catch (loadError) {
-      setError(
+      if (latestRequestRef.current === requestId) setError(
         loadError instanceof Error
           ? loadError.message
           : "เกิดข้อผิดพลาด",
       );
     } finally {
-      setLoading(false);
+      if (latestRequestRef.current === requestId) setLoading(false);
     }
   }, [requestUrl]);
 
@@ -370,19 +374,24 @@ export default function ContentAnalysisResultsLibrary() {
 
   function applySearch() {
     setPage(1);
-    setQuery(
-      queryInput.trim(),
-    );
+    setAppliedFilters({
+      query: queryInput.trim(),
+      pageId,
+      productCategory,
+      recommendation,
+      minScore,
+      mediaKind,
+    });
   }
 
   function resetFilters() {
     setQueryInput("");
-    setQuery("");
     setPageId("");
     setProductCategory("");
     setRecommendation("");
     setMinScore("0");
     setMediaKind("");
+    setAppliedFilters({ query: "", pageId: "", productCategory: "", recommendation: "", minScore: "0", mediaKind: "" });
     setPage(1);
   }
 
@@ -546,7 +555,6 @@ export default function ContentAnalysisResultsLibrary() {
           <select
             value={pageId}
             onChange={(event) => {
-              setPage(1);
               setPageId(
                 event.target.value,
               );
@@ -571,7 +579,6 @@ export default function ContentAnalysisResultsLibrary() {
           <select
             value={mediaKind}
             onChange={(event) => {
-              setPage(1);
               setMediaKind(event.target.value);
             }}
             className="h-11 rounded-2xl border border-slate-200 bg-white px-3 text-xs text-slate-700 outline-none focus:border-teal-400"
@@ -584,7 +591,6 @@ export default function ContentAnalysisResultsLibrary() {
           <select
             value={productCategory}
             onChange={(event) => {
-              setPage(1);
               setProductCategory(
                 event.target.value,
               );
@@ -606,7 +612,6 @@ export default function ContentAnalysisResultsLibrary() {
           <select
             value={recommendation}
             onChange={(event) => {
-              setPage(1);
               setRecommendation(
                 event.target.value,
               );
@@ -628,7 +633,6 @@ export default function ContentAnalysisResultsLibrary() {
           <select
             value={minScore}
             onChange={(event) => {
-              setPage(1);
               setMinScore(
                 event.target.value,
               );
