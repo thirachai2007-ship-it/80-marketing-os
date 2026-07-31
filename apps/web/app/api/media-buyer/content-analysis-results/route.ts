@@ -92,6 +92,7 @@ export async function GET(
       params
         .get("confidence")
         ?.trim() || "";
+    const mediaKind = params.get("mediaKind")?.trim().toUpperCase() || "";
     const minScore = Math.max(
       0,
       Math.min(
@@ -143,6 +144,11 @@ export async function GET(
               productCategory,
             }
           : {}),
+        ...(mediaKind === "VIDEO"
+          ? { mediaType: { contains: "video", mode: "insensitive" as const } }
+          : mediaKind === "IMAGE"
+            ? { NOT: { mediaType: { contains: "video", mode: "insensitive" as const } } }
+            : {}),
         ...(query
           ? {
               OR: [
@@ -298,6 +304,7 @@ export async function GET(
         productCategory,
         recommendation,
         confidence,
+        mediaKind,
         minScore,
         maxScore,
       },

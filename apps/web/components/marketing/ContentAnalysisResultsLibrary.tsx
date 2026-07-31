@@ -243,6 +243,7 @@ export default function ContentAnalysisResultsLibrary() {
   ] = useState("");
   const [minScore, setMinScore] =
     useState("0");
+  const [mediaKind, setMediaKind] = useState("");
   const [page, setPage] =
     useState(1);
   const [expandedId, setExpandedId] =
@@ -300,10 +301,12 @@ export default function ContentAnalysisResultsLibrary() {
         recommendation,
       );
     }
+    if (mediaKind) params.set("mediaKind", mediaKind);
 
     return `/api/media-buyer/content-analysis-results?${params.toString()}`;
   }, [
     minScore,
+    mediaKind,
     page,
     pageId,
     productCategory,
@@ -364,6 +367,7 @@ export default function ContentAnalysisResultsLibrary() {
     setProductCategory("");
     setRecommendation("");
     setMinScore("0");
+    setMediaKind("");
     setPage(1);
   }
 
@@ -547,6 +551,19 @@ export default function ContentAnalysisResultsLibrary() {
                 </option>
               ),
             )}
+          </select>
+
+          <select
+            value={mediaKind}
+            onChange={(event) => {
+              setPage(1);
+              setMediaKind(event.target.value);
+            }}
+            className="h-11 rounded-2xl border border-slate-200 bg-white px-3 text-xs text-slate-700 outline-none focus:border-teal-400"
+          >
+            <option value="">สื่อทั้งหมด</option>
+            <option value="VIDEO">วิดีโอเท่านั้น</option>
+            <option value="IMAGE">ภาพนิ่งเท่านั้น</option>
           </select>
 
           <select
