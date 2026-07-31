@@ -256,6 +256,7 @@ export default function ContentAnalysisResultsLibrary() {
     isVideo: boolean;
     title: string;
     permalinkUrl: string | null;
+    downloadUrl: string;
   } | null>(null);
   const [fitMedia, setFitMedia] = useState(false);
   const previewVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -720,7 +721,7 @@ export default function ContentAnalysisResultsLibrary() {
                     <button
                       type="button"
                       disabled={!fullMedia}
-                      onClick={() => fullMedia && (setFitMedia(false), setSoundEnabled(false), setMediaPreview({ src: originalMedia, poster: item.content.thumbnailUrl, isVideo, title: item.content.pageName, permalinkUrl: item.content.permalinkUrl }))}
+                      onClick={() => fullMedia && (setFitMedia(false), setSoundEnabled(false), setMediaPreview({ src: originalMedia, poster: item.content.thumbnailUrl, isVideo, title: item.content.pageName, permalinkUrl: item.content.permalinkUrl, downloadUrl: `/api/media-buyer/content-analysis-results/${item.id}/download` }))}
                       className="group relative aspect-[9/16] w-full max-w-[230px] overflow-hidden rounded-[24px] border border-white/10 bg-black shadow-xl disabled:cursor-default"
                       title="เปิดดูไฟล์ต้นฉบับขนาดใหญ่"
                     >
@@ -1186,10 +1187,12 @@ export default function ContentAnalysisResultsLibrary() {
           aria-label={`พรีวิว ${mediaPreview.title}`}
           onClick={() => setMediaPreview(null)}
         >
-          <div className="absolute left-4 top-4 z-10 flex gap-2">
+          <div className="absolute left-4 right-16 top-4 z-10 flex flex-wrap gap-2">
             <button type="button" onClick={(event) => { event.stopPropagation(); setFitMedia(false); }} className={`rounded-full px-4 py-2 text-xs font-bold shadow-xl ${!fitMedia ? "bg-cyan-500 text-white" : "bg-white text-slate-900"}`}>ขนาดจริง 100%</button>
             <button type="button" onClick={(event) => { event.stopPropagation(); setFitMedia(true); }} className={`rounded-full px-4 py-2 text-xs font-bold shadow-xl ${fitMedia ? "bg-cyan-500 text-white" : "bg-white text-slate-900"}`}>พอดีหน้าจอ</button>
             {mediaPreview.isVideo && !mediaPreview.permalinkUrl && <button type="button" onClick={(event) => { event.stopPropagation(); enablePreviewSound(); }} className={`rounded-full px-4 py-2 text-xs font-bold shadow-xl ${soundEnabled ? "bg-emerald-500 text-white" : "bg-white text-slate-900"}`}>{soundEnabled ? "เปิดเสียงแล้ว 100%" : "เปิดเสียง"}</button>}
+            <a href={mediaPreview.downloadUrl} onClick={(event) => event.stopPropagation()} className="inline-flex items-center gap-2 rounded-full bg-violet-600 px-4 py-2 text-xs font-bold text-white shadow-xl hover:bg-violet-700"><Download size={14}/>ดาวน์โหลดไฟล์</a>
+            {mediaPreview.isVideo && mediaPreview.permalinkUrl && <a href={mediaPreview.permalinkUrl} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()} className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-xs font-bold text-slate-900 shadow-xl"><ExternalLink size={14}/>เปิดโพสต์ต้นฉบับ</a>}
           </div>
           <button type="button" onClick={() => setMediaPreview(null)} className="absolute right-4 top-4 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white text-slate-950 shadow-xl" aria-label="ปิดพรีวิว"><X size={22}/></button>
           <div className={`h-full w-full overflow-auto ${fitMedia ? "flex items-center justify-center" : "block text-center"}`} onClick={(event) => event.stopPropagation()}>
