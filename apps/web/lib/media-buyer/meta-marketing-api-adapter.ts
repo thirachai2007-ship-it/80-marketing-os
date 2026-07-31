@@ -1105,12 +1105,6 @@ export class MetaMarketingApiAdapter {
       linkData.image_hash = imageHash;
     }
 
-    if (input.videoId) {
-      throw new Error(
-        "Creative Adapter v1 รองรับ image/link creative เท่านั้น; video ต้องใช้ Video Creative Adapter แยก",
-      );
-    }
-
     return this.request<{
       id: string;
     }>({
