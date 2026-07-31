@@ -715,7 +715,7 @@ export default function ContentAnalysisResultsLibrary() {
                 className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm"
               >
                 <div className="grid gap-0 md:grid-cols-[260px_1fr]">
-                  <div className="flex items-start justify-center bg-slate-950 p-3">
+                  <div className="flex items-start justify-center bg-slate-950 p-3 md:self-start md:rounded-br-[24px]">
                     <button
                       type="button"
                       disabled={!fullMedia}
