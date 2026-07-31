@@ -1,7 +1,8 @@
 import { setTimeout as delay } from "node:timers/promises";
+import sharp from "sharp";
 
 export const META_MARKETING_API_ADAPTER_VERSION =
-  "meta-marketing-api-adapter-v1";
+  "meta-marketing-api-adapter-v1.1-jpeg-normalization";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_RETRIES = 3;
@@ -1069,8 +1070,39 @@ export class MetaMarketingApiAdapter {
     };
 
     if (input.imageUrl) {
-      linkData.picture =
-        input.imageUrl;
+      const sourceResponse = await fetch(input.imageUrl, {
+        cache: "no-store",
+        signal: AbortSignal.timeout(this.config.timeoutMs),
+      });
+      if (!sourceResponse.ok) {
+        throw new Error(
+          `Cannot download creative image: HTTP ${sourceResponse.status}`,
+        );
+      }
+      const normalizedImage = await sharp(
+        Buffer.from(await sourceResponse.arrayBuffer()),
+      )
+        .rotate()
+        .flatten({ background: "#ffffff" })
+        .jpeg({ quality: 92, chromaSubsampling: "4:4:4" })
+        .toBuffer();
+      const uploaded = await this.request<{
+        images?: Record<string, { hash?: string }>;
+      }>({
+        method: "POST",
+        path: `/act_${adAccountId}/adimages`,
+        body: {
+          bytes: normalizedImage.toString("base64"),
+          name: `${input.name}.jpg`,
+        },
+      });
+      const imageHash = Object.values(uploaded.images ?? {}).find(
+        (image) => typeof image.hash === "string" && image.hash.length > 0,
+      )?.hash;
+      if (!imageHash) {
+        throw new Error("Meta image upload did not return an image hash");
+      }
+      linkData.image_hash = imageHash;
     }
 
     if (input.videoId) {
