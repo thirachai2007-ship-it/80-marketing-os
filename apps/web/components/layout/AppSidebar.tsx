@@ -96,6 +96,12 @@ function isMenuActive(pathname: string, href?: string) {
 
 export default function AppSidebar() {
   const pathname = usePathname();
+  const activeHref = menuGroups
+    .flatMap((group) => group.items)
+    .filter((item) => isMenuActive(pathname, item.href))
+    .map((item) => item.href)
+    .filter((href): href is string => Boolean(href))
+    .sort((a, b) => b.length - a.length)[0];
 
   return (
     <aside className="app-sidebar flex h-screen w-[260px] shrink-0 flex-col overflow-hidden border-r border-slate-800/80">
@@ -137,7 +143,7 @@ export default function AppSidebar() {
             <div className="space-y-1">
               {group.items.map((item) => {
                 const Icon = item.icon;
-                const active = isMenuActive(pathname, item.href);
+                const active = item.href === activeHref;
 
                 const content = (
                   <>
@@ -200,10 +206,6 @@ export default function AppSidebar() {
                         : "text-slate-300 hover:bg-white/[0.065] hover:text-white",
                     ].join(" ")}
                   >
-                    {active && (
-                      <span className="absolute inset-y-2 left-0 w-[3px] rounded-r-full bg-white/90" />
-                    )}
-
                     {content}
                   </Link>
                 );

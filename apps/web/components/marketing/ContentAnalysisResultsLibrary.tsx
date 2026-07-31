@@ -831,7 +831,7 @@ export default function ContentAnalysisResultsLibrary() {
                       </div>
                     </div>
 
-                    {readyToCopy && (
+                    {readyToCopy && expanded && (
                       <div className="mt-4 rounded-2xl border border-violet-200 bg-violet-50 p-4">
                         <div className="flex items-center justify-between gap-3">
                           <div>
