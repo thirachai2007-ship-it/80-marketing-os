@@ -107,11 +107,19 @@ export default function OwnerCommandCenter() {
         updated?: number;
         skipped?: number;
         failed?: number;
+        results?: Array<{
+          status?: string;
+          error?: string;
+        }>;
         error?: string;
       };
       if (!response.ok || !result.ok) {
+        const metaError = result.results?.find(
+          (item) => item.status === "FAILED" && item.error,
+        )?.error;
         throw new Error(
-          result.error ||
+          metaError ||
+            result.error ||
             `ซ่อม Targeting ไม่สำเร็จ ${result.failed ?? 0} รายการ`,
         );
       }
