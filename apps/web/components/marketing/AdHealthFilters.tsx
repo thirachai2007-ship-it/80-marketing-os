@@ -9,11 +9,13 @@ export default function AdHealthFilters({
   accounts,
   currentPage,
   currentAccount,
+  currentStatus,
 }: {
   pages: Option[];
   accounts: Option[];
   currentPage: string;
   currentAccount: string;
+  currentStatus: string;
 }) {
   const router = useRouter();
 
@@ -23,6 +25,7 @@ export default function AdHealthFilters({
     const account = key === "account" ? value : currentAccount;
     if (page) params.set("page", page);
     if (account) params.set("account", account);
+    if (currentStatus) params.set("status", currentStatus);
     router.replace(`/marketing/ad-health${params.size ? `?${params.toString()}` : ""}`);
   }
 
