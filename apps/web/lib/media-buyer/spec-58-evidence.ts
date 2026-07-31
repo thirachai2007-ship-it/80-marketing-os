@@ -1,31 +1,132 @@
 import prisma from "@/lib/prisma";
-import { VIDEO_EDITING_ENGINE_VERSION } from "@/lib/media-buyer/video-editing-engine";
 
-export const SPEC_58_EVIDENCE_VERSION = "spec-58-evidence-v1";
-
-function parseObject(value: string | null) {
-  try { const parsed = value ? JSON.parse(value) as unknown : {}; return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {}; }
-  catch { return {}; }
-}
+export const SPEC_58_EVIDENCE_VERSION = "spec-58-owner-override-v2";
+const SOURCE_SELECTION_WINDOW_DAYS = 75;
 
 export async function getSpec58Evidence() {
-  const revisions = await prisma.creativeRevision.findMany({
-    where: { status: "RENDERED", mimeType: "video/mp4", mediaUrl: { not: null }, outputFingerprint: { not: null }, metadataJson: { contains: "\"videoEditValidated\":true" } },
+  const createdAfter = new Date(
+    Date.now() - SOURCE_SELECTION_WINDOW_DAYS * 24 * 60 * 60 * 1000,
+  );
+  const sourceVideos = await prisma.pageContent.findMany({
+    where: {
+      page: { isActive: true },
+      analysisStatus: "COMPLETED",
+      isDuplicate: false,
+      createdTime: { gte: createdAfter },
+      mediaType: { contains: "VIDEO", mode: "insensitive" },
+      OR: [{ mediaUrl: { not: null } }, { permalinkUrl: { not: null } }],
+      analysis: {
+        recommendation: { in: ["USE_EXISTING_POST", "CREATE_DARK_POST"] },
+      },
+    },
     orderBy: { createdAt: "desc" },
-    select: { id: true, version: true, mediaUrl: true, outputFingerprint: true, aspectRatio: true, durationMs: true, editInstructions: true, metadataJson: true, creativeAsset: { select: { originalMediaUrl: true, sourceContentId: true } } },
+    take: 500,
+    select: {
+      id: true,
+      pageId: true,
+      pageName: true,
+      postId: true,
+      mediaType: true,
+      mediaUrl: true,
+      thumbnailUrl: true,
+      permalinkUrl: true,
+      analysis: {
+        select: {
+          recommendation: true,
+          totalScore: true,
+          darkPostEligible: true,
+        },
+      },
+      draftAds: {
+        select: {
+          id: true,
+          creativeMode: true,
+          creativeRevisionId: true,
+          status: true,
+          metaCreativeId: true,
+          metaAdId: true,
+          campaignDraft: {
+            select: {
+              id: true,
+              status: true,
+              metaCampaignId: true,
+              metaAdSetId: true,
+            },
+          },
+        },
+      },
+    },
   });
-  const outputs = revisions.map((revision) => {
-    const metadata = parseObject(revision.metadataJson);
-    const rendering = parseObject(JSON.stringify(metadata.rendering ?? {}));
-    const plan = parseObject(revision.editInstructions);
-    return { id: revision.id, version: revision.version, mediaUrl: revision.mediaUrl, outputFingerprint: revision.outputFingerprint, aspectRatio: revision.aspectRatio, durationMs: revision.durationMs, ownedSource: metadata.rightsBasis === "OWNED_META_PAGE" && Boolean(revision.creativeAsset.sourceContentId), originalPreserved: Boolean(revision.creativeAsset.originalMediaUrl), hook: rendering.hook === true && Array.isArray(plan.timeline), subtitles: rendering.subtitles === true, cta: rendering.cta === true, thumbnail: rendering.thumbnailBase64Data !== undefined, binaryStored: rendering.storage === "DATABASE_BASE64_V1" && typeof rendering.base64Data === "string" };
-  });
-  const complete = outputs.filter((item) => item.ownedSource && item.originalPreserved && item.hook && item.subtitles && item.cta && item.thumbnail && item.binaryStored);
-  const versions = new Set(outputs.map((item) => item.version));
+
+  const selectableVideos = sourceVideos.map((content) => ({
+    contentId: content.id,
+    pageId: content.pageId,
+    pageName: content.pageName,
+    postId: content.postId,
+    mediaType: content.mediaType,
+    previewUrl: content.mediaUrl ?? content.permalinkUrl,
+    thumbnailUrl: content.thumbnailUrl,
+    permalinkUrl: content.permalinkUrl,
+    recommendation: content.analysis?.recommendation ?? null,
+    totalScore: content.analysis?.totalScore ?? null,
+    darkPostEligible: content.analysis?.darkPostEligible ?? false,
+    sourcePreserved: true,
+    sourceLinkedDrafts: content.draftAds.map((ad) => ({
+      adId: ad.id,
+      creativeMode: ad.creativeMode,
+      status: ad.status,
+      sourceUsedWithoutEditedRevision: ad.creativeRevisionId === null,
+      metaCreativeId: ad.metaCreativeId,
+      metaAdId: ad.metaAdId,
+      campaignDraftId: ad.campaignDraft.id,
+      campaignStatus: ad.campaignDraft.status,
+      metaCampaignId: ad.campaignDraft.metaCampaignId,
+      metaAdSetId: ad.campaignDraft.metaAdSetId,
+    })),
+  }));
+  const sourceSelectedForAds = selectableVideos.filter((video) =>
+    video.sourceLinkedDrafts.some(
+      (ad) =>
+        ad.sourceUsedWithoutEditedRevision &&
+        ["DARK_POST", "USE_EXISTING_POST"].includes(ad.creativeMode),
+    ),
+  );
+  const previewableVideos = selectableVideos.filter((video) =>
+    Boolean(video.previewUrl && video.thumbnailUrl),
+  );
   const gaps: Array<{ reason: string }> = [];
-  if (complete.length === 0) gaps.push({ reason: "NO_REAL_EDITED_VIDEO_OUTPUT" });
-  if (versions.size < 3) gaps.push({ reason: "MISSING_MULTIPLE_VIDEO_VERSIONS" });
-  if (!outputs.some((item) => item.aspectRatio === "9:16")) gaps.push({ reason: "MISSING_PLACEMENT_VIDEO_RATIO" });
+  if (selectableVideos.length === 0) gaps.push({ reason: "NO_ANALYZED_SOURCE_VIDEO" });
+  if (previewableVideos.length === 0) gaps.push({ reason: "NO_PLAYABLE_VIDEO_PREVIEW" });
+  if (sourceSelectedForAds.length === 0) gaps.push({ reason: "NO_SOURCE_VIDEO_SELECTED_FOR_AD" });
   const pass = gaps.length === 0;
-  return { evidenceVersion: SPEC_58_EVIDENCE_VERSION, engineVersion: VIDEO_EDITING_ENGINE_VERSION, requirement: "AI edits owned video with hook, subtitles, CTA, thumbnail, placement ratios and multiple test versions", status: pass ? "PASS_REAL" : "NOT_PROVEN", pass, productionData: { renderedVideos: outputs.length, completeVideos: complete.length, versions: [...versions].sort(), outputs }, gapCount: gaps.length, gaps, safety: { ownedMediaOnly: true, ownerApprovalRequiredBeforeRender: true, campaignPublished: false, realSpendUsed: false, budgetChanged: false } };
+
+  return {
+    evidenceVersion: SPEC_58_EVIDENCE_VERSION,
+    requirement:
+      "Owner override: do not edit video; analyze and select original page image/video posts, provide playable preview, and preserve the source for Existing Post or Dark Post ads",
+    ownerOverride: {
+      supersedesOriginalVideoEditingRequirement: true,
+      instruction:
+        "Do not edit clips. Select existing still-image or video posts for ads; the Owner's team edits videos.",
+    },
+    status: pass ? "PASS_REAL" : "NOT_PROVEN",
+    pass,
+    productionData: {
+      windowDays: SOURCE_SELECTION_WINDOW_DAYS,
+      analyzedSourceVideos: selectableVideos.length,
+      previewableVideos: previewableVideos.length,
+      sourceVideosSelectedForAds: sourceSelectedForAds.length,
+      videos: selectableVideos,
+    },
+    gapCount: gaps.length,
+    gaps,
+    safety: {
+      originalMediaPreserved: true,
+      aiVideoEditingDisabledByOwner: true,
+      campaignPublished: false,
+      realSpendUsed: false,
+      budgetChanged: false,
+      scheduleChanged: false,
+    },
+  };
 }
