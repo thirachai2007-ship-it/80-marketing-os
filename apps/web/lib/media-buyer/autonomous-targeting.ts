@@ -228,10 +228,13 @@ export async function buildAutonomousTargeting(campaignDraftId: string) {
   const targeting: Record<string, unknown> = {
     geo_locations:
       regions.length > 0
-        ? { regions }
+        ? { regions: regions.map(({ key }) => ({ key })) }
         : { countries: ["TH"] },
     age_min: ageMin,
     age_max: ageMax,
+    targeting_automation: {
+      advantage_audience: 0,
+    },
     ...(genders ? { genders } : {}),
     ...(interests.length > 0 && includedCustomAudiences.length === 0
       ? { flexible_spec: [{ interests }] }
