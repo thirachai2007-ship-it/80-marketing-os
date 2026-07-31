@@ -110,15 +110,20 @@ export default function OwnerCommandCenter() {
         results?: Array<{
           status?: string;
           error?: string;
+          attemptedTargeting?: Record<string, unknown> | null;
         }>;
         error?: string;
       };
       if (!response.ok || !result.ok) {
-        const metaError = result.results?.find(
+        const failedResult = result.results?.find(
           (item) => item.status === "FAILED" && item.error,
-        )?.error;
+        );
+        const metaError = failedResult?.error;
+        const targetingDetail = failedResult?.attemptedTargeting
+          ? ` · Targeting: ${JSON.stringify(failedResult.attemptedTargeting)}`
+          : "";
         throw new Error(
-          metaError ||
+          (metaError ? `${metaError}${targetingDetail}` : "") ||
             result.error ||
             `ซ่อม Targeting ไม่สำเร็จ ${result.failed ?? 0} รายการ`,
         );
