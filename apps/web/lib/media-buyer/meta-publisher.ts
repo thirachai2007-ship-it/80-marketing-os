@@ -51,6 +51,7 @@ export type MetaCampaignPayload = {
     description: string | null;
     callToAction: string;
     mediaUrl: string;
+    thumbnailUrl: string | null;
     mimeType: string | null;
   }>;
 };
@@ -739,6 +740,10 @@ export async function buildMetaPublishPayload(
         ad.callToAction,
 
       mediaUrl,
+
+      thumbnailUrl:
+        normalizeText(content?.thumbnailUrl) ||
+        null,
 
       mimeType:
         content?.mediaType?.toUpperCase().includes("VIDEO")

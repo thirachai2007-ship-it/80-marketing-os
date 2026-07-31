@@ -57,6 +57,7 @@ type MetaPublishPayload = {
     description: string | null;
     callToAction: string;
     mediaUrl: string;
+    thumbnailUrl: string | null;
     mimeType: string | null;
   }>;
 };
