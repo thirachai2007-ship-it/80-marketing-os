@@ -11,6 +11,8 @@ export async function getAdPerformanceReport(days = 30) {
         name: true,
         effectiveStatus: true,
         adAccountId: true,
+        objectStoryId: true,
+        effectiveObjectStoryId: true,
         campaign: { select: { name: true, effectiveStatus: true } },
         adSet: { select: { name: true, effectiveStatus: true } },
       },
@@ -29,6 +31,15 @@ export async function getAdPerformanceReport(days = 30) {
     }).catch(() => []),
   ]);
 
+  const storyIds = Array.from(new Set(ads.flatMap((ad) => [ad.effectiveObjectStoryId, ad.objectStoryId].filter((value): value is string => Boolean(value)))));
+  const contents = storyIds.length > 0
+    ? await prisma.pageContent.findMany({
+        where: { OR: [{ objectStoryId: { in: storyIds } }, { postId: { in: storyIds } }] },
+        select: { objectStoryId: true, postId: true, mediaUrl: true, thumbnailUrl: true, mediaType: true, message: true, permalinkUrl: true },
+      }).catch(() => [])
+    : [];
+  const contentByStory = new Map(contents.flatMap((content) => [[content.objectStoryId, content] as const, [content.postId, content] as const]));
+
   const insightByAd = new Map(grouped.map((item) => [item.adId, item]));
   return ads.map((ad) => {
     const insight = insightByAd.get(ad.id);
@@ -40,6 +51,7 @@ export async function getAdPerformanceReport(days = 30) {
       clicks: insight?._sum.clicks ?? 0,
       frequency: insight?._avg.frequency ?? null,
     };
-    return { ...ad, performance, recommendation: adviseAdPerformance(performance) };
+    const preview = contentByStory.get(ad.effectiveObjectStoryId ?? "") ?? contentByStory.get(ad.objectStoryId ?? "") ?? null;
+    return { ...ad, preview, performance, recommendation: adviseAdPerformance(performance) };
   });
 }

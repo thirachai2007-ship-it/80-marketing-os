@@ -18,6 +18,10 @@ type DashboardState = {
   analyzedPosts: number;
   averageScore: number;
   campaignsTracked: number;
+  existingPosts: number;
+  darkPosts: number;
+  activeAds: number;
+  pausedAds: number;
 };
 
 const emptyState: DashboardState = {
@@ -25,6 +29,10 @@ const emptyState: DashboardState = {
   analyzedPosts: 0,
   averageScore: 0,
   campaignsTracked: 0,
+  existingPosts: 0,
+  darkPosts: 0,
+  activeAds: 0,
+  pausedAds: 0,
 };
 
 export default function OwnerCommandCenter() {
@@ -49,6 +57,10 @@ export default function OwnerCommandCenter() {
           analyzedPosts: Number(content?.summary?.total ?? 0),
           averageScore: Number(content?.summary?.averageScore ?? 0),
           campaignsTracked: Number(meta?.totals?.campaigns ?? 0),
+          existingPosts: Number(content?.summary?.useExistingPost ?? 0),
+          darkPosts: Number(content?.summary?.createDarkPost ?? 0),
+          activeAds: Array.isArray(meta?.ads) ? meta.ads.filter((ad: { effectiveStatus?: string }) => ad.effectiveStatus === "ACTIVE").length : 0,
+          pausedAds: Array.isArray(meta?.ads) ? meta.ads.filter((ad: { effectiveStatus?: string }) => ad.effectiveStatus !== "ACTIVE").length : 0,
         });
       } finally {
         setLoading(false);
@@ -130,26 +142,31 @@ export default function OwnerCommandCenter() {
       </section>
 
       <section className="grid gap-5 lg:grid-cols-2">
-        {workspaces.map(({ title, description, href, icon: Icon, accent }) => (
-          <Link
-            key={href}
-            href={href}
-            className="group rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg"
-          >
-            <div className="flex items-start gap-4">
-              <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${accent} text-white shadow-lg`}>
-                <Icon size={23} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <h2 className="text-lg font-bold text-slate-950">{title}</h2>
-                <p className="mt-2 text-sm leading-6 text-slate-500">{description}</p>
-                <span className="mt-4 inline-flex items-center gap-2 text-xs font-bold text-cyan-700">
-                  เปิดดู <ArrowRight size={15} className="transition group-hover:translate-x-1" />
-                </span>
-              </div>
-            </div>
-          </Link>
-        ))}
+        <Link href={workspaces[0].href} className="group rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm transition hover:shadow-lg">
+          <div className="flex items-center justify-between"><div><p className="text-xs font-bold text-teal-600">ภาพรวมโพสต์ 75 วัน</p><h2 className="mt-1 text-lg font-bold text-slate-950">โพสต์ที่ AI แนะนำ</h2></div><BrainCircuit className="text-teal-500" size={28}/></div>
+          <div className="mt-5 flex items-center gap-6">
+            <div className="relative flex h-32 w-32 shrink-0 items-center justify-center rounded-full" style={{ background: `conic-gradient(#14b8a6 0 ${state.analyzedPosts ? (state.existingPosts / state.analyzedPosts) * 100 : 0}%, #8b5cf6 0 ${state.analyzedPosts ? ((state.existingPosts + state.darkPosts) / state.analyzedPosts) * 100 : 0}%, #e2e8f0 0)` }}><div className="flex h-20 w-20 flex-col items-center justify-center rounded-full bg-white"><strong className="text-2xl text-slate-950">{state.recommendedPosts}</strong><span className="text-[9px] text-slate-400">แนะนำ</span></div></div>
+            <div className="min-w-0 flex-1 space-y-3 text-xs"><div><div className="flex justify-between"><span>ใช้โพสต์เดิม</span><b>{state.existingPosts}</b></div><div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full bg-teal-500" style={{width: `${state.recommendedPosts ? state.existingPosts / state.recommendedPosts * 100 : 0}%`}}/></div></div><div><div className="flex justify-between"><span>สร้าง Dark Post</span><b>{state.darkPosts}</b></div><div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full bg-violet-500" style={{width: `${state.recommendedPosts ? state.darkPosts / state.recommendedPosts * 100 : 0}%`}}/></div></div><span className="inline-flex items-center gap-2 font-bold text-teal-700">ดูโพสต์และพรีวิว <ArrowRight size={14}/></span></div>
+          </div>
+        </Link>
+
+        <Link href={workspaces[1].href} className="group rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm transition hover:shadow-lg">
+          <div className="flex items-center justify-between"><div><p className="text-xs font-bold text-blue-600">META READ-ONLY</p><h2 className="mt-1 text-lg font-bold text-slate-950">สถานะโฆษณาที่ซิงก์ล่าสุด</h2></div><BarChart3 className="text-blue-500" size={28}/></div>
+          <div className="mt-6 flex h-40 items-end justify-center gap-8 border-b border-slate-200 px-5">
+            {[{label:"ACTIVE",value:state.activeAds,color:"bg-emerald-500"},{label:"ไม่ ACTIVE",value:state.pausedAds,color:"bg-slate-400"}].map((bar) => { const max = Math.max(state.activeAds, state.pausedAds, 1); return <div key={bar.label} className="flex h-full w-24 flex-col items-center justify-end"><b className="mb-2 text-xl">{bar.value}</b><div className={`w-full rounded-t-2xl ${bar.color}`} style={{height:`${Math.max(8, bar.value / max * 105)}px`}}/><span className="mt-2 text-[10px] font-bold text-slate-500">{bar.label}</span></div>; })}
+          </div>
+          <p className="mt-5 inline-flex items-center gap-2 text-xs font-bold text-blue-700">ดูรายงานราย Ad พร้อมพรีวิว <ArrowRight size={14}/></p>
+        </Link>
+
+        <Link href={workspaces[2].href} className="group rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm transition hover:shadow-lg">
+          <div className="flex items-center justify-between"><div><p className="text-xs font-bold text-amber-600">วางแผนทุก 7 วัน</p><h2 className="mt-1 text-lg font-bold text-slate-950">ความพร้อมคอนเทนต์</h2></div><CalendarClock className="text-amber-500" size={28}/></div>
+          <div className="mt-6 rounded-2xl bg-amber-50 p-5"><div className="flex items-end justify-between"><div><p className="text-xs text-amber-700">คะแนนเฉลี่ยของโพสต์</p><strong className="text-4xl text-amber-950">{state.averageScore}</strong><span className="text-sm text-amber-700"> / 100</span></div><div className="h-20 w-3 overflow-hidden rounded-full bg-white"><div className="w-full bg-amber-500" style={{height:`${state.averageScore}%`, marginTop:`${100-state.averageScore}%`}}/></div></div><div className="mt-4 h-3 overflow-hidden rounded-full bg-white"><div className="h-full rounded-full bg-gradient-to-r from-rose-400 via-amber-400 to-emerald-500" style={{width:`${state.averageScore}%`}}/></div></div>
+          <p className="mt-5 inline-flex items-center gap-2 text-xs font-bold text-amber-700">ดูสิ่งที่แต่ละเพจกำลังขาด <ArrowRight size={14}/></p>
+        </Link>
+
+        <Link href={workspaces[3].href} className="group flex min-h-[260px] flex-col justify-between rounded-[28px] bg-gradient-to-br from-violet-600 to-fuchsia-600 p-6 text-white shadow-lg transition hover:shadow-xl">
+          <div><MessageCircleMore size={34}/><h2 className="mt-5 text-2xl font-bold">คุยกับ 80 Marketing AI</h2><p className="mt-3 text-sm leading-6 text-violet-100">ถามเรื่องแอด กลุ่มเป้าหมาย ผลโฆษณา หรือแนบภาพ วิดีโอ และเอกสารได้ทุกเมื่อ</p></div><span className="inline-flex items-center gap-2 text-sm font-bold">เปิดแชท <ArrowRight size={16}/></span>
+        </Link>
       </section>
 
       <section className="flex gap-3 rounded-3xl border border-cyan-200 bg-cyan-50 p-5 text-sm leading-6 text-cyan-950">

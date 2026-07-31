@@ -36,6 +36,12 @@ export default async function ContentPlanPage() {
     const missing = Math.max(0, target - recent.length);
     return { ...policy, total: recent.length, videos, images, target, missing };
   }));
+  const pages = Array.from(rows.reduce((grouped, row) => {
+    const current = grouped.get(row.pageId) ?? { pageId: row.pageId, pageName: row.page.name, rows: [] as typeof rows };
+    current.rows.push(row);
+    grouped.set(row.pageId, current);
+    return grouped;
+  }, new Map<string, { pageId: string; pageName: string; rows: typeof rows }>()).values());
 
   return (
     <AppShell>
@@ -55,15 +61,22 @@ export default async function ContentPlanPage() {
             {replacements.length === 0 && <p className="text-sm text-slate-500">รอบนี้ยังไม่พบแอดที่มีหลักฐานเพียงพอว่าต้องเตรียมตัวทดแทน</p>}
           </div>
         </section>
-        <section className="grid gap-4 lg:grid-cols-2">
-          {rows.map((row) => {
+        <section className="space-y-6">
+          {pages.map((page) => (
+            <section key={page.pageId} className="overflow-hidden rounded-[30px] border-2 border-teal-200 bg-white shadow-sm">
+              <header className="flex flex-wrap items-center justify-between gap-3 border-b border-teal-100 bg-teal-50 px-6 py-5">
+                <div><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-teal-600">แผนคอนเทนต์แยกตามเพจ</p><h2 className="mt-1 text-xl font-black text-slate-950">{page.pageName}</h2></div>
+                <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-teal-700">{page.rows.length} สินค้า</span>
+              </header>
+              <div className="grid gap-4 p-5 lg:grid-cols-2">
+          {page.rows.map((row) => {
             const needVideo = row.videos === 0 ? 1 : 0;
             const needImage = Math.max(0, row.missing - needVideo);
             return (
-              <article key={`${row.pageId}-${row.productCategory}`} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <article key={`${row.pageId}-${row.productCategory}`} className="rounded-3xl border border-slate-200 bg-slate-50/50 p-5">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="text-[10px] font-bold text-teal-600">{row.page.name}</p>
+                    <p className="text-[10px] font-bold text-teal-600">{page.pageName}</p>
                     <h2 className="mt-1 text-lg font-bold text-slate-950">{productLabel(row.productCategory)}</h2>
                   </div>
                   <span className={`rounded-full px-3 py-1 text-[10px] font-bold ${row.missing > 0 ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-700"}`}>
@@ -88,6 +101,9 @@ export default async function ContentPlanPage() {
               </article>
             );
           })}
+              </div>
+            </section>
+          ))}
         </section>
       </div>
     </AppShell>
