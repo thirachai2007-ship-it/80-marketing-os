@@ -13,7 +13,7 @@ import type {
 } from "@/lib/media-buyer/meta-marketing-api-adapter";
 
 export const META_PUBLISH_ORCHESTRATOR_VERSION =
-  "meta-publish-orchestrator-v1";
+  "meta-publish-orchestrator-v1.1-image-video-dark-post";
 
 type OrchestratorStatus =
   | "VALIDATED"
@@ -216,15 +216,6 @@ function latestByAction(
       decision.action ===
       action,
   ) ?? null;
-}
-
-function isImageMime(
-  mimeType: string | null,
-): boolean {
-  return (
-    mimeType === null ||
-    mimeType.startsWith("image/")
-  );
 }
 
 function normalizeAdAccountId(
@@ -996,65 +987,6 @@ export async function orchestrateMetaPublish(
 
       reason:
         "Campaign, Ad Set, Ads ต้องเป็น PAUSED และ CampaignDraftAd ต้องพร้อมครบทุกตัว",
-    };
-  }
-
-  const unsupportedVideo =
-    payload.ads.some(
-      (ad) =>
-        !isImageMime(
-          ad.mimeType,
-        ),
-    );
-
-  if (unsupportedVideo) {
-    return {
-      orchestratorVersion:
-        META_PUBLISH_ORCHESTRATOR_VERSION,
-
-      status:
-        "SKIPPED",
-
-      campaignDraftId:
-        draft.id,
-
-      campaignName:
-        draft.campaignName,
-
-      pageId:
-        draft.pageId,
-
-      pageName:
-        draft.page.name,
-
-      adAccountId:
-        draft.adAccountId,
-
-      productCategory:
-        draft.productCategory,
-
-      approvalFingerprint:
-        approvalFingerprint ??
-        undefined,
-
-      payloadFingerprint:
-        payloadFingerprint ??
-        undefined,
-
-      executionFingerprint:
-        executionFingerprint ??
-        undefined,
-
-      ...base,
-
-      metaMutationExecuted:
-        false,
-
-      createdInMetaPaused:
-        false,
-
-      reason:
-        "Adapter v1 รองรับ Image/Link Creative เท่านั้น",
     };
   }
 
