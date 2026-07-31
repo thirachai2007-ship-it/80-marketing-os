@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { openai } from "@/lib/openai";
 import { advisoryModePolicy } from "@/lib/media-buyer/advisory-mode-policy";
+import { getAdPerformanceReport } from "@/lib/media-buyer/ad-performance-report";
 import { hasValidOwnerSession, isSameOriginRequest } from "@/lib/owner-session";
 import prisma from "@/lib/prisma";
 
@@ -162,6 +163,7 @@ export async function POST(request: NextRequest) {
       metaConnection,
       readyDraftCount,
       pausedCampaignCount,
+      adPerformance,
     ] = await Promise.all([
       prisma.metaConnection.findFirst({
         orderBy: { updatedAt: "desc" },
@@ -185,6 +187,7 @@ export async function POST(request: NextRequest) {
           createdInMetaAt: { not: null },
         },
       }),
+      getAdPerformanceReport(30),
     ]);
 
     // Chat is advisory-only. It never turns natural-language requests into
@@ -207,6 +210,14 @@ export async function POST(request: NextRequest) {
             metaConnection,
             readyDraftCount,
             pausedCampaignCount,
+            adPerformance: adPerformance.slice(0, 30).map((ad) => ({
+              ad: ad.name,
+              campaign: ad.campaign.name,
+              adSet: ad.adSet.name,
+              account: ad.adAccountId,
+              metrics: ad.performance,
+              recommendation: ad.recommendation,
+            })),
           },
         }),
         policyJson: JSON.stringify({
@@ -284,8 +295,11 @@ export async function POST(request: NextRequest) {
         `ใช้นโยบาย ${advisoryModePolicy.mode} และข้อมูลโพสต์ย้อนหลัง ${advisoryModePolicy.contentWindowDays} วัน`,
         "ต้องใช้สถานะจริงจากระบบที่แนบมากับข้อความ ห้ามบอกว่า Meta ไม่เชื่อมต่อหากสถานะระบุว่าเชื่อมต่อ",
         "เมื่อผู้ใช้ขอให้แก้โฆษณา ให้บอกสิ่งที่ควรแก้ เหตุผล และขั้นตอน แต่ห้ามอ้างว่าระบบแก้ใน Meta แล้ว",
-        "ถ้า Draft ถูกข้าม ต้องรายงาน stage, status และ reason/detail จากรายละเอียดผลแต่ละ Draft เพื่อให้ Owner รู้สาเหตุจริง",
-        "แชทนี้สั่ง Autonomous Meta Preparation Engine ได้เมื่อ Owner ใช้คำสั่งลงมือชัดเจน ระบบจะสร้างได้เฉพาะ PAUSED เท่านั้น",
+        "ตอบคำถามด้านการยิงแอด การปรับปรุงแอด และการวิเคราะห์แอดในฐานะ Senior Media Buyer โดยอิงข้อมูลจริงที่แนบมา",
+        "เมื่อประเมินโฆษณา ให้จำแนกเป็น ควรไปต่อ ควรปรับปรุง พิจารณาหยุด หรือเก็บข้อมูลต่อ พร้อมหลักฐานและขั้นตอนที่ Owner ทำเองได้",
+        "ROAS 5 เท่าเป็นเป้าหมาย ไม่ใช่คำรับประกัน หากไม่มีข้อมูลยอดขายที่ผูกกับแอดต้องบอกว่ายังยืนยัน ROAS ไม่ได้ ห้ามเดาตัวเลข",
+        "คำแนะนำกลุ่มเป้าหมายต้องระบุสัดส่วน Broad, Retarget และ LAL; ใช้ LAL ได้เฉพาะเมื่อมี Seed Audience จริงและมีคุณภาพ ห้ามแต่งข้อมูล Audience ขึ้นมา",
+        "แนะนำครีเอทีฟทดแทนเป็นวงจรทุก 7 วันเมื่อพบความล้าหรือผลตก แต่ห้ามสร้างหรือแก้ไขสิ่งใดใน Meta",
       ].join("\n"),
       input: [
         ...history,

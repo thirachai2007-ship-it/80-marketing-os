@@ -1,5 +1,6 @@
 import AppShell from "@/components/layout/AppShell";
 import prisma from "@/lib/prisma";
+import { getAdPerformanceReport } from "@/lib/media-buyer/ad-performance-report";
 import { CalendarClock, ImageIcon, Video } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -18,11 +19,12 @@ export default async function ContentPlanPage() {
   // This dynamic server page intentionally evaluates the latest 14-day window.
   // eslint-disable-next-line react-hooks/purity
   const cutoff14 = new Date(Date.now() - 14 * 86_400_000);
-  const policies = await prisma.pageProductPolicy.findMany({
+  const [policies, adReport] = await Promise.all([prisma.pageProductPolicy.findMany({
     where: { isEnabled: true, page: { isActive: true } },
     orderBy: [{ page: { name: "asc" } }, { productCategory: "asc" }],
     select: { pageId: true, productCategory: true, minimumAds: true, page: { select: { name: true } } },
-  }).catch(() => []);
+  }).catch(() => []), getAdPerformanceReport(14)]);
+  const replacements = adReport.filter((ad) => ad.recommendation.status === "IMPROVE" || ad.recommendation.status === "CONSIDER_STOP");
   const rows = await Promise.all(policies.map(async (policy) => {
     const recent = await prisma.pageContent.findMany({
       where: { pageId: policy.pageId, productCategory: policy.productCategory, createdTime: { gte: cutoff14 } },
@@ -42,6 +44,16 @@ export default async function ContentPlanPage() {
           <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-amber-600">แผนปรับใหม่ทุก 7 วัน</p>
           <h1 className="heading-font mt-2 text-3xl font-bold text-slate-950">คอนเทนต์ที่แต่ละเพจกำลังขาด</h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">ใช้โพสต์ใหม่ย้อนหลัง 14 วันเพื่อจัดรายการที่ควรส่งให้ทีมงานผลิต โดยแนะนำให้สลับงานขาย รีวิว ผลงานจริง และเบื้องหลัง</p>
+        </section>
+        <section className="rounded-3xl border border-rose-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-rose-600">วงจรแอดทดแทนทุก 7 วัน</p><h2 className="mt-1 text-xl font-bold text-slate-950">แอดที่ต้องเตรียมตัวใหม่ขึ้นทดสอบ</h2><p className="mt-1 text-xs text-slate-500">อิงผลย้อนหลัง 14 วัน โดยระบบเสนอแผนเท่านั้นและไม่แก้โฆษณาใน Meta</p></div>
+            <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-bold text-rose-700">{replacements.length} ตัว</span>
+          </div>
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            {replacements.slice(0, 12).map((ad) => <article key={ad.id} className="rounded-2xl bg-slate-50 p-4"><div className="flex items-center justify-between gap-3"><p className="font-bold text-slate-900">{ad.name}</p><span className="shrink-0 rounded-full bg-white px-2 py-1 text-[10px] font-bold text-rose-700">{ad.recommendation.label}</span></div><p className="mt-1 text-[10px] text-slate-400">{ad.campaign.name} · {ad.adSet.name}</p><p className="mt-2 text-xs leading-5 text-slate-600">{ad.recommendation.reason}</p><p className="mt-2 text-xs font-semibold text-teal-700">ครีเอทีฟทดแทน: {ad.recommendation.nextAction}</p></article>)}
+            {replacements.length === 0 && <p className="text-sm text-slate-500">รอบนี้ยังไม่พบแอดที่มีหลักฐานเพียงพอว่าต้องเตรียมตัวทดแทน</p>}
+          </div>
         </section>
         <section className="grid gap-4 lg:grid-cols-2">
           {rows.map((row) => {

@@ -12,6 +12,7 @@ import {
   ArrowRight,
   BrainCircuit,
   CheckCircle2,
+  Download,
   ExternalLink,
   Filter,
   ImageIcon,
@@ -20,6 +21,17 @@ import {
   ShieldCheck,
   TriangleAlert,
 } from "lucide-react";
+
+function targetingMix(strategy: string, confidence: string) {
+  const normalized = `${strategy} ${confidence}`.toUpperCase();
+  if (normalized.includes("LOOKALIKE") || normalized.includes("LAL")) {
+    return { broad: 55, retarget: 25, lal: 20, note: "ใช้ LAL ได้ต่อเมื่อมี Seed Audience จริงและมีคุณภาพเพียงพอ" };
+  }
+  if (normalized.includes("HIGH")) {
+    return { broad: 60, retarget: 25, lal: 15, note: "LAL เป็นตัวเลือกแบบมีเงื่อนไข ต้องตรวจ Seed Audience ก่อนใช้" };
+  }
+  return { broad: 75, retarget: 25, lal: 0, note: "ยังไม่มีหลักฐาน Seed Audience เพียงพอ จึงไม่สร้าง LAL ขึ้นมาเอง" };
+}
 
 type PageOption = {
   id: string;
@@ -618,6 +630,9 @@ export default function ContentAnalysisResultsLibrary() {
               item.content.mediaUrl;
             const expanded =
               expandedId === item.id;
+            const mix = item.audience
+              ? targetingMix(item.audience.strategy, item.analysis.confidence)
+              : null;
             const reasons =
               textArray(
                 item.analysis.reasons,
@@ -727,6 +742,15 @@ export default function ContentAnalysisResultsLibrary() {
                             <ExternalLink
                               size={16}
                             />
+                          </a>
+                        )}
+                        {(item.content.mediaUrl || item.content.thumbnailUrl) && (
+                          <a
+                            href={`/api/media-buyer/content-analysis-results/${item.id}/download`}
+                            className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:border-teal-300 hover:text-teal-700"
+                            title="ดาวน์โหลดภาพหรือวิดีโอต้นฉบับ"
+                          >
+                            <Download size={16} />
                           </a>
                         )}
                       </div>
@@ -889,6 +913,17 @@ export default function ContentAnalysisResultsLibrary() {
                                   }
                                 </dd>
                               </div>
+                              {mix && (
+                                <div>
+                                  <dt className="text-teal-700">สัดส่วนทดสอบกลุ่มเป้าหมาย</dt>
+                                  <dd className="mt-2 grid grid-cols-3 gap-2 text-center font-bold text-teal-950">
+                                    <span className="rounded-xl bg-white p-2">Broad {mix.broad}%</span>
+                                    <span className="rounded-xl bg-white p-2">Retarget {mix.retarget}%</span>
+                                    <span className="rounded-xl bg-white p-2">LAL {mix.lal}%</span>
+                                  </dd>
+                                  <p className="mt-2 text-[10px] leading-4 text-teal-700">{mix.note}</p>
+                                </div>
+                              )}
                               <div>
                                 <dt className="text-teal-700">จังหวัดแนะนำ</dt>
                                 <dd className="mt-1 font-bold leading-5 text-teal-950">
