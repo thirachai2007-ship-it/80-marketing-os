@@ -8,6 +8,7 @@ type MetaAttachment = {
   type?: string;
   target?: { id?: string };
   media?: { source?: string; image?: { src?: string } };
+  subattachments?: { data?: MetaAttachment[] };
 };
 type MetaPostMedia = {
   full_picture?: string;
@@ -49,6 +50,23 @@ export async function resolveOriginalContentMedia(analysisId: string) {
     );
     const attachment = post.attachments?.data?.[0];
     const targetId = attachment?.target?.id;
+    const attachedVideoSource =
+      attachment?.media?.source ??
+      attachment?.subattachments?.data?.find((candidate) =>
+        candidate.media?.source,
+      )?.media?.source;
+
+    // The source attached to the Page post is the closest representation of
+    // the published asset. Prefer it over Video.source: Meta can return a
+    // playback/transcode variant for the target video object and that variant
+    // is not guaranteed to contain the post's audio track.
+    if (
+      analysis.content.mediaType.toLowerCase().includes("video") &&
+      attachedVideoSource
+    ) {
+      return attachedVideoSource;
+    }
+
     if (targetId) {
       if (analysis.content.mediaType.toLowerCase().includes("video")) {
         const video = await metaRequest<MetaTargetMedia>(
@@ -72,7 +90,7 @@ export async function resolveOriginalContentMedia(analysisId: string) {
     }
 
     return analysis.content.mediaType.toLowerCase().includes("video")
-      ? attachment?.media?.source ?? fallback
+      ? attachedVideoSource ?? fallback
       : post.full_picture ?? attachment?.media?.image?.src ?? fallback;
   } catch {
     return fallback;

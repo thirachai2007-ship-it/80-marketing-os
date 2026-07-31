@@ -15,6 +15,55 @@ function productLabel(value: string) {
   } as Record<string, string>)[value] ?? value;
 }
 
+function productionDirection(
+  category: string,
+  pageName: string,
+) {
+  const directions: Record<
+    string,
+    Array<{
+      objective: string;
+      concept: string;
+      proof: string;
+    }>
+  > = {
+    STICKER: [
+      { objective: "พิสูจน์คุณภาพ", concept: "ถ่ายวิดีโอติดสติกเกอร์กับชิ้นงานจริง ตั้งแต่ลอก ติด รีด จนเห็นผิวงานใกล้ ๆ และทำภาพนิ่ง Before/After พร้อมราคาและขนาด", proof: "ต้องเห็นความคม สี ขอบตัด การยึดเกาะ และวัสดุจริง ไม่ใช้ภาพสินค้าอย่างเดียว" },
+      { objective: "สร้างความเชื่อมั่น", concept: "รีวิวออเดอร์ลูกค้าจริง: โจทย์ลูกค้า ไฟล์ก่อนผลิต ผลงานหลังผลิต และภาพการนำไปใช้งาน", proof: "ระบุชนิดสติกเกอร์ จำนวนขั้นต่ำ ระยะผลิต และช่องทางส่งไฟล์ให้ครบ" },
+      { objective: "กระตุ้นการทัก", concept: "เปรียบเทียบสติกเกอร์แต่ละชนิดว่าเหมาะกับงานใด พร้อมตัวอย่าง 3 พื้นผิวและข้อเสนอขอประเมินราคาฟรี", proof: "ต้องมีตัวอย่างจริงและ CTA ให้ส่งขนาด/จำนวนมาประเมิน ไม่กล่าวอ้างความทนโดยไม่มีการทดสอบ" },
+    ],
+    DTG: [
+      { objective: "โชว์ความต่างของงานพิมพ์", concept: "ถ่าย Close-up ลาย DTG บนผ้าจริง เทียบก่อน–หลังพิมพ์ และซูมรายละเอียดสี ไล่เฉด และผิวสัมผัส", proof: "ให้เห็นเนื้อผ้า ลายพิมพ์จริง สีเสื้อ และแสงธรรมชาติ พร้อมบอกข้อจำกัดของไฟล์" },
+      { objective: "เพิ่มความมั่นใจก่อนสั่ง", concept: "ทำรีวิวขั้นตอนรับไฟล์ เตรียมเสื้อ พิมพ์ อบ และตรวจคุณภาพ พร้อมภาพเสื้อเต็มตัวด้านหน้า/หลัง", proof: "ระบุจำนวนขั้นต่ำ ระยะผลิต ไซซ์ และวิธีส่งไฟล์อย่างชัดเจน" },
+      { objective: "ขายงานเฉพาะบุคคล", concept: "เล่าเคสลูกค้าจากไอเดียหนึ่งภาพสู่เสื้อ DTG จริง พร้อมภาพต้นฉบับเทียบชิ้นงานและคำตอบเรื่องสี", proof: "ใช้ผลงานลูกค้าที่ได้รับอนุญาต และไม่แต่งภาพจนสีต่างจากสินค้าจริง" },
+    ],
+    COTTON_DTF: [
+      { objective: "อธิบายสินค้าให้เข้าใจง่าย", concept: "สาธิตเสื้อ Cotton DTF แบบจับ ยืด พลิกด้านใน และซูมขอบลาย พร้อมภาพสีเสื้อและไซซ์ที่มี", proof: "แสดงผ้าจริง ความยืดหยุ่น ขนาด และงานพิมพ์ในแสงเดียวกัน" },
+      { objective: "ลดความกังวลเรื่องการใช้งาน", concept: "ทำคลิปวิธีดูแลและซักเสื้อ DTF พร้อมภาพก่อน–หลังใช้งานตามจริง และข้อความข้อควรระวัง", proof: "ไม่สรุปว่าทนกี่ครั้งหากยังไม่มีการทดสอบจริง" },
+      { objective: "กระตุ้นงานทีม/องค์กร", concept: "โชว์ชุดเสื้อหลายไซซ์ของออเดอร์จริง ตั้งแต่จัดไซซ์จนแพ็กส่ง พร้อมตารางราคาแบบช่วงจำนวน", proof: "ระบุจำนวนขั้นต่ำ ระยะผลิต และสิ่งที่ลูกค้าต้องเตรียม" },
+    ],
+    PRINTED_SHIRT: [
+      { objective: "ขายด้วยลายและการสวมจริง", concept: "ถ่ายคนสวมเสื้อพิมพ์ลายทั้งหน้า–หลัง 3 มุม พร้อม Close-up ลาย ตารางไซซ์ และราคาตามจำนวน", proof: "ใช้สีและสัดส่วนเสื้อจริง ไม่ยืดภาพ Mockup จนผิดรูป" },
+      { objective: "สร้างความเชื่อถือจากผลงาน", concept: "เล่าเคสออเดอร์จริง ตั้งแต่ลายต้นฉบับ เลือกผ้า ผลิต จนลูกค้าได้รับ พร้อมรีวิวหรือหลักฐานส่งมอบ", proof: "ปิดข้อมูลส่วนตัวลูกค้าและระบุระยะผลิตตามจริง" },
+      { objective: "หาลูกค้ากลุ่มเฉพาะ", concept: "ทำคอนเทนต์หนึ่งกลุ่มต่อหนึ่งโพสต์ เช่น ทีมกีฬา ร้านค้า กลุ่มกิจกรรม หรือเสื้อรุ่น พร้อมตัวอย่างงานที่ตรงกลุ่ม", proof: "ข้อความ ราคา และ CTA ต้องตรงกับกลุ่มนั้น ไม่รวมหลายกลุ่มในโพสต์เดียว" },
+    ],
+    APRON: [
+      { objective: "สาธิตการใช้งานจริง", concept: "ถ่ายพนักงานใส่ผ้ากันเปื้อนทำงานจริง โชว์ทรง สาย กระเป๋า และการเคลื่อนไหว พร้อมภาพหน้า–หลัง", proof: "ระบุขนาด เนื้อผ้า สี การปรับสาย และตำแหน่งพิมพ์/ปัก" },
+      { objective: "พิสูจน์การดูแลรักษา", concept: "สาธิตคราบที่พบในงานจริงและขั้นตอนทำความสะอาด พร้อมภาพสภาพผ้าหลังซักตามวิธีที่ร้านแนะนำ", proof: "ใช้ผลทดสอบจริงและไม่กล่าวอ้างกันน้ำ/กันคราบเกินข้อมูลสินค้า" },
+      { objective: "ขายงานร้านและทีม", concept: "ทำ Before/After ภาพลักษณ์ทีมก่อนและหลังใส่ผ้ากันเปื้อนพร้อมโลโก้ พร้อมแพ็กเกจตามจำนวน", proof: "แสดงสีผ้า โลโก้จริง จำนวนขั้นต่ำ ระยะผลิต และค่าทำแบบ" },
+    ],
+  };
+  const options = directions[category] ?? [
+    { objective: "สร้างหลักฐานสินค้า", concept: "ถ่ายสินค้าและการใช้งานจริง พร้อมราคา เงื่อนไข และช่องทางติดต่อ", proof: "ข้อมูลทุกจุดต้องตรวจสอบได้จากสินค้าจริง" },
+  ];
+  return options[
+    Array.from(`${pageName}-${category}`).reduce(
+      (sum, character) => sum + character.charCodeAt(0),
+      0,
+    ) % options.length
+  ];
+}
+
 export default async function ContentPlanPage() {
   // This dynamic server page intentionally evaluates the latest 14-day window.
   // eslint-disable-next-line react-hooks/purity
@@ -58,6 +107,10 @@ export default async function ContentPlanPage() {
             : row.missing === 1
               ? "ควรทำรอบนี้"
               : "เตรียมสำรอง",
+        direction: productionDirection(
+          row.productCategory,
+          row.page.name,
+        ),
       };
     })
     .sort((a, b) =>
@@ -116,7 +169,9 @@ export default async function ContentPlanPage() {
                   <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${item.missing > 0 ? "bg-rose-50 text-rose-700" : "bg-blue-50 text-blue-700"}`}>{item.priority}</span>
                 </div>
                 <p className="mt-3 text-xs font-semibold text-slate-700">ส่งงาน: วิดีโอ {item.needVideo} คลิป · ภาพนิ่ง {item.needImage} ภาพ</p>
-                <p className="mt-2 text-xs leading-5 text-slate-500">แนวงาน: สาธิตสินค้า/ผลงานจริงหรือรีวิวลูกค้า พร้อมราคา เงื่อนไข และช่องทางติดต่อที่อ่านชัด</p>
+                <p className="mt-2 text-[11px] font-bold text-violet-700">เป้าหมาย: {item.direction.objective}</p>
+                <p className="mt-1 text-xs leading-5 text-slate-600">แนวงาน: {item.direction.concept}</p>
+                <p className="mt-2 text-[11px] leading-5 text-teal-700">หลักฐานที่ต้องถ่ายให้เห็น: {item.direction.proof}</p>
                 <p className="mt-2 text-[11px] font-semibold text-amber-700">เหตุผล: 14 วันที่ผ่านมา มี {item.total} โพสต์ (วิดีโอ {item.videos}, ภาพ {item.images}) เป้าหมายขั้นต่ำ {item.target} โพสต์</p>
               </article>
             ))}
