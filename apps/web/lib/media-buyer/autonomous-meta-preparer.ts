@@ -7,7 +7,7 @@ import { executeMetaPublishPlan } from "@/lib/media-buyer/meta-publish-executor"
 import { orchestrateMetaPublish } from "@/lib/media-buyer/meta-publish-orchestrator";
 
 export const AUTONOMOUS_META_PREPARER_VERSION =
-  "autonomous-meta-preparer-v1.2-audience-targeting";
+  "autonomous-meta-preparer-v1.3-ready-draft-queue";
 
 const DEFAULT_BATCH_SIZE = 2;
 const MAX_BATCH_SIZE = 5;
@@ -268,7 +268,6 @@ export async function runAutonomousMetaPreparationBatch(
       createdInMetaAt: null,
       ads: {
         some: {
-          status: "READY_FOR_APPROVAL",
           metaAdId: null,
           metaCreativeId: null,
         },
