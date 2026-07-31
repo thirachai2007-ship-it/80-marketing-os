@@ -17,10 +17,12 @@ import {
   ExternalLink,
   Filter,
   ImageIcon,
+  Maximize2,
   RefreshCcw,
   Search,
   ShieldCheck,
   TriangleAlert,
+  X,
 } from "lucide-react";
 
 function targetingMix(strategy: string, confidence: string) {
@@ -246,12 +248,31 @@ export default function ContentAnalysisResultsLibrary() {
   const [expandedId, setExpandedId] =
     useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [mediaPreview, setMediaPreview] = useState<{
+    src: string;
+    poster: string | null;
+    isVideo: boolean;
+    title: string;
+  } | null>(null);
 
   const copyAdText = useCallback(async (id: string, text: string) => {
     await navigator.clipboard.writeText(text);
     setCopiedId(id);
     window.setTimeout(() => setCopiedId((current) => current === id ? null : current), 1800);
   }, []);
+
+  useEffect(() => {
+    if (!mediaPreview) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMediaPreview(null);
+    };
+    document.addEventListener("keydown", closeOnEscape);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", closeOnEscape);
+      document.body.style.overflow = "";
+    };
+  }, [mediaPreview]);
 
   const requestUrl = useMemo(() => {
     const params =
@@ -636,6 +657,8 @@ export default function ContentAnalysisResultsLibrary() {
               item.content
                 .thumbnailUrl ||
               item.content.mediaUrl;
+            const fullMedia = item.content.mediaUrl || media;
+            const isVideo = item.content.mediaType.toLowerCase().includes("video");
             const expanded =
               expandedId === item.id;
             const mix = item.audience
@@ -662,14 +685,20 @@ export default function ContentAnalysisResultsLibrary() {
               >
                 <div className="grid gap-0 md:grid-cols-[260px_1fr]">
                   <div className="flex items-start justify-center bg-slate-950 p-3">
-                    <div className="aspect-[9/16] w-full max-w-[230px] overflow-hidden rounded-[24px] border border-white/10 bg-black shadow-xl">
-                    {media && item.content.mediaType.toLowerCase().includes("video") ? (
+                    <button
+                      type="button"
+                      disabled={!fullMedia}
+                      onClick={() => fullMedia && setMediaPreview({ src: fullMedia, poster: item.content.thumbnailUrl, isVideo, title: item.content.pageName })}
+                      className="group relative aspect-[9/16] w-full max-w-[230px] overflow-hidden rounded-[24px] border border-white/10 bg-black shadow-xl disabled:cursor-default"
+                      title="เปิดดูไฟล์ต้นฉบับขนาดใหญ่"
+                    >
+                    {media && isVideo ? (
                       <video
                         src={item.content.mediaUrl ?? undefined}
                         poster={item.content.thumbnailUrl ?? undefined}
-                        controls
                         preload="metadata"
                         playsInline
+                        muted
                         className="h-full w-full bg-black object-contain"
                       />
                     ) : media ? (
@@ -685,7 +714,8 @@ export default function ContentAnalysisResultsLibrary() {
                         className="text-slate-300"
                       />
                     )}
-                    </div>
+                    {fullMedia && <span className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-black/70 text-white backdrop-blur transition group-hover:scale-110"><Maximize2 size={17}/></span>}
+                    </button>
                   </div>
 
                   <div className="p-5">
@@ -1105,6 +1135,27 @@ export default function ContentAnalysisResultsLibrary() {
         <ShieldCheck size={18} />
         หน้านี้อ่านข้อมูลอย่างเดียว ไม่เรียก AI ไม่เปลี่ยน Queue และไม่สร้างหรือเผยแพร่โฆษณา
       </div>
+
+      {mediaPreview && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 p-3 backdrop-blur-sm sm:p-8"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`พรีวิว ${mediaPreview.title}`}
+          onClick={() => setMediaPreview(null)}
+        >
+          <button type="button" onClick={() => setMediaPreview(null)} className="absolute right-4 top-4 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white text-slate-950 shadow-xl" aria-label="ปิดพรีวิว"><X size={22}/></button>
+          <div className="flex h-full w-full items-center justify-center" onClick={(event) => event.stopPropagation()}>
+            {mediaPreview.isVideo ? (
+              <video src={mediaPreview.src} poster={mediaPreview.poster ?? undefined} controls autoPlay playsInline className="max-h-full max-w-full bg-black object-contain shadow-2xl" />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={mediaPreview.src} alt={mediaPreview.title} className="max-h-full max-w-full object-contain shadow-2xl" />
+            )}
+          </div>
+          <div className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-black/70 px-4 py-2 text-center text-xs text-white">แสดงไฟล์ต้นฉบับ · คลิกพื้นที่ว่างหรือกด Esc เพื่อปิด</div>
+        </div>
+      )}
     </div>
   );
 }
