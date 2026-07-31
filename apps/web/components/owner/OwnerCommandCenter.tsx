@@ -55,6 +55,8 @@ function dateTime(value: string | null) {
 export default function OwnerCommandCenter() {
   const [data, setData] = useState<CommandCenterData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [repairing, setRepairing] = useState(false);
+  const [repairMessage, setRepairMessage] = useState("");
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
@@ -83,6 +85,52 @@ export default function OwnerCommandCenter() {
     const timer = window.setTimeout(() => void load(), 0);
     return () => window.clearTimeout(timer);
   }, [load]);
+
+  async function repairPausedTargeting() {
+    setRepairing(true);
+    setRepairMessage("");
+    setError("");
+    try {
+      const response = await fetch(
+        "/api/media-buyer/autonomous-meta-preparer",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mode: "REFRESH_EXISTING_PAUSED_TARGETING",
+            batchSize: 5,
+          }),
+        },
+      );
+      const result = (await response.json()) as {
+        ok: boolean;
+        updated?: number;
+        skipped?: number;
+        failed?: number;
+        error?: string;
+      };
+      if (!response.ok || !result.ok) {
+        throw new Error(
+          result.error ||
+            `ซ่อม Targeting ไม่สำเร็จ ${result.failed ?? 0} รายการ`,
+        );
+      }
+      setRepairMessage(
+        result.updated
+          ? `ซ่อม Targeting ของ Ad Set ที่ PAUSED สำเร็จ ${result.updated} รายการ`
+          : "ตรวจครบแล้ว ไม่มี Ad Set ที่ PAUSED และต้องซ่อมเพิ่ม",
+      );
+      await load();
+    } catch (repairError) {
+      setError(
+        repairError instanceof Error
+          ? repairError.message
+          : "ซ่อม Targeting ไม่สำเร็จ",
+      );
+    } finally {
+      setRepairing(false);
+    }
+  }
 
   if (loading && !data) {
     return (
@@ -129,6 +177,31 @@ export default function OwnerCommandCenter() {
           {error}
         </div>
       )}
+
+      <section className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-cyan-200 bg-cyan-50 p-5">
+        <div>
+          <h2 className="font-bold text-cyan-950">
+            Audience Targeting ของ Meta
+          </h2>
+          <p className="mt-1 text-sm text-cyan-800">
+            ใช้แผนอายุ เพศ จังหวัด Interest และ Audience ID ที่ยืนยันแล้ว
+            แก้เฉพาะ Ad Set ที่ PAUSED
+          </p>
+          {repairMessage && (
+            <p className="mt-2 text-sm font-semibold text-emerald-700">
+              {repairMessage}
+            </p>
+          )}
+        </div>
+        <button
+          type="button"
+          disabled={repairing}
+          onClick={() => void repairPausedTargeting()}
+          className="rounded-2xl bg-cyan-700 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-cyan-700/20 disabled:opacity-50"
+        >
+          {repairing ? "กำลังตรวจและซ่อม..." : "ตรวจและซ่อม Targeting ตอนนี้"}
+        </button>
+      </section>
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {[
