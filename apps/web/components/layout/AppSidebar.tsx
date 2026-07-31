@@ -7,6 +7,8 @@ import {
   Bot,
   Boxes,
   BrainCircuit,
+  BarChart3,
+  CalendarClock,
   ChevronRight,
   MessageCircleMore,
   ShieldCheck,
@@ -35,17 +37,17 @@ const menuGroups: MenuGroup[] = [
     title: "OWNER",
     items: [
       {
-        title: "Owner Command Center",
+        title: "ภาพรวมที่ปรึกษา AI",
         href: "/",
         icon: ShieldCheck,
       },
       {
-        title: "Reports & Dark Posts",
-        href: "/marketing/decision-audit",
+        title: "โพสต์และ Dark Post",
+        href: "/marketing/content-intelligence/results",
         icon: ScrollText,
       },
       {
-        title: "คุยกับ 80 AI",
+        title: "คุยกับ 80 Marketing AI",
         href: "/marketing/ai-chat",
         icon: MessageCircleMore,
       },
@@ -55,7 +57,17 @@ const menuGroups: MenuGroup[] = [
     title: "OPERATIONS",
     items: [
       {
-        title: "Content Analysis",
+        title: "รายงานคุณภาพโฆษณา",
+        href: "/marketing/ad-health",
+        icon: BarChart3,
+      },
+      {
+        title: "แผนคอนเทนต์ 7 วัน",
+        href: "/marketing/content-plan",
+        icon: CalendarClock,
+      },
+      {
+        title: "สถานะวิเคราะห์ 75 วัน",
         href: "/marketing/content-intelligence",
         icon: BrainCircuit,
       },
@@ -213,14 +225,14 @@ export default function AppSidebar() {
               <div>
                 <div className="flex items-center gap-2">
                   <p className="text-xs font-semibold text-white">
-                    AI Engine
+                  AI Advisor
                   </p>
 
                   <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
                 </div>
 
                 <p className="mt-1 text-[10px] text-slate-400">
-                  Online and ready
+                  Read-only and ready
                 </p>
               </div>
             </div>

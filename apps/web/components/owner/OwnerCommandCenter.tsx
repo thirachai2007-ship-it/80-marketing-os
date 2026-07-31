@@ -1,361 +1,160 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import {
   ArrowRight,
-  CheckCircle2,
-  FileText,
+  BarChart3,
+  BrainCircuit,
+  CalendarClock,
   LoaderCircle,
-  LockKeyhole,
-  Megaphone,
-  RefreshCw,
+  MessageCircleMore,
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
 
-type CommandCenterData = {
-  ok: boolean;
-  authenticated?: boolean;
-  error?: string;
-  summary: {
-    darkPostCampaigns: number;
-    darkPostAds: number;
-    pausedCampaigns: number;
-    reports: number;
-  };
-  darkPosts: Array<{
-    campaignDraftId: string;
-    campaignName: string;
-    pageName: string;
-    productCategory: string;
-    createdInMetaAt: string | null;
-    adCount: number;
-    completeAdCount: number;
-    paused: boolean;
-  }>;
-  reports: Array<{
-    id: string;
-    ownerCategory: "REPORT" | "DARK_POST" | null;
-    action: string;
-    reason: string;
-    createdAt: string;
-  }>;
+type DashboardState = {
+  recommendedPosts: number;
+  analyzedPosts: number;
+  averageScore: number;
+  campaignsTracked: number;
 };
 
-function dateTime(value: string | null) {
-  if (!value) return "-";
-  return new Date(value).toLocaleString("th-TH", {
-    timeZone: "Asia/Bangkok",
-    dateStyle: "short",
-    timeStyle: "short",
-  });
-}
+const emptyState: DashboardState = {
+  recommendedPosts: 0,
+  analyzedPosts: 0,
+  averageScore: 0,
+  campaignsTracked: 0,
+};
 
 export default function OwnerCommandCenter() {
-  const [data, setData] = useState<CommandCenterData | null>(null);
+  const [state, setState] = useState(emptyState);
   const [loading, setLoading] = useState(true);
-  const [repairing, setRepairing] = useState(false);
-  const [repairMessage, setRepairMessage] = useState("");
-  const [error, setError] = useState("");
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const response = await fetch(
-        "/api/media-buyer/owner-command-center",
-        { cache: "no-store" },
-      );
-      const result = (await response.json()) as CommandCenterData;
-      if (!response.ok || !result.ok) {
-        throw new Error(result.error || "โหลดข้อมูลไม่สำเร็จ");
-      }
-      setData(result);
-    } catch (loadError) {
-      setError(
-        loadError instanceof Error ? loadError.message : "โหลดข้อมูลไม่สำเร็จ",
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, []);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => void load(), 0);
-    return () => window.clearTimeout(timer);
-  }, [load]);
-
-  async function repairPausedTargeting() {
-    setRepairing(true);
-    setRepairMessage("");
-    setError("");
-    try {
-      const response = await fetch(
-        "/api/media-buyer/autonomous-meta-preparer",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            mode: "REFRESH_EXISTING_PAUSED_TARGETING",
-            batchSize: 5,
+    const timer = window.setTimeout(async () => {
+      try {
+        const [contentResponse, metaResponse] = await Promise.all([
+          fetch("/api/media-buyer/content-analysis-results?page=1&pageSize=1", {
+            cache: "no-store",
           }),
-        },
-      );
-      const result = (await response.json()) as {
-        ok: boolean;
-        updated?: number;
-        skipped?: number;
-        failed?: number;
-        results?: Array<{
-          status?: string;
-          error?: string;
-          attemptedTargeting?: Record<string, unknown> | null;
-        }>;
-        error?: string;
-      };
-      if (!response.ok || !result.ok) {
-        const failedResult = result.results?.find(
-          (item) => item.status === "FAILED" && item.error,
-        );
-        const metaError = failedResult?.error;
-        const targetingDetail = failedResult?.attemptedTargeting
-          ? ` · Targeting: ${JSON.stringify(failedResult.attemptedTargeting)}`
-          : "";
-        throw new Error(
-          (metaError ? `${metaError}${targetingDetail}` : "") ||
-            result.error ||
-            `ซ่อม Targeting ไม่สำเร็จ ${result.failed ?? 0} รายการ`,
-        );
+          fetch("/api/meta/ad-objects", { cache: "no-store" }),
+        ]);
+        const content = contentResponse.ok ? await contentResponse.json() : null;
+        const meta = metaResponse.ok ? await metaResponse.json() : null;
+        setState({
+          recommendedPosts:
+            Number(content?.summary?.useExistingPost ?? 0) +
+            Number(content?.summary?.createDarkPost ?? 0),
+          analyzedPosts: Number(content?.summary?.total ?? 0),
+          averageScore: Number(content?.summary?.averageScore ?? 0),
+          campaignsTracked: Number(meta?.totals?.campaigns ?? 0),
+        });
+      } finally {
+        setLoading(false);
       }
-      setRepairMessage(
-        result.updated
-          ? `ซ่อม Targeting ของ Ad Set ที่ PAUSED สำเร็จ ${result.updated} รายการ`
-          : "ตรวจครบแล้ว ไม่มี Ad Set ที่ PAUSED และต้องซ่อมเพิ่ม",
-      );
-      await load();
-    } catch (repairError) {
-      setError(
-        repairError instanceof Error
-          ? repairError.message
-          : "ซ่อม Targeting ไม่สำเร็จ",
-      );
-    } finally {
-      setRepairing(false);
-    }
-  }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
-  if (loading && !data) {
-    return (
-      <div className="flex min-h-[65vh] items-center justify-center">
-        <LoaderCircle className="animate-spin text-cyan-600" size={30} />
-      </div>
-    );
-  }
+  const workspaces = [
+    {
+      title: "โพสต์และ Dark Post ที่แนะนำ",
+      description:
+        "ดูพรีวิวภาพหรือวิดีโอ พร้อมข้อความโฆษณา จุดแข็ง จุดอ่อน อายุ จังหวัด และความสนใจ",
+      href: "/marketing/content-intelligence/results",
+      icon: BrainCircuit,
+      accent: "from-teal-500 to-cyan-500",
+    },
+    {
+      title: "รายงานคุณภาพโฆษณารายวัน",
+      description:
+        "อ่านผลทุกบัญชีโฆษณาที่เชื่อมต่อ พร้อมคำแนะนำว่าควรปรับภาพ วิดีโอ ข้อความ หรือกลุ่มเป้าหมายอย่างไร",
+      href: "/marketing/ad-health",
+      icon: BarChart3,
+      accent: "from-blue-500 to-indigo-500",
+    },
+    {
+      title: "แผนแอดใหม่และคอนเทนต์",
+      description:
+        "รายการงานที่ควรเตรียมทุก 7 วัน และสิ่งที่แต่ละเพจกำลังขาด เพื่อส่งต่อให้ทีมคอนเทนต์",
+      href: "/marketing/content-plan",
+      icon: CalendarClock,
+      accent: "from-amber-500 to-orange-500",
+    },
+    {
+      title: "คุยกับ 80 Marketing AI",
+      description:
+        "ถามเรื่องแอด กลุ่มเป้าหมาย ยอดขาย หรือแนบภาพ วิดีโอ และเอกสารเพื่อขอคำปรึกษาได้ทุกเมื่อ",
+      href: "/marketing/ai-chat",
+      icon: MessageCircleMore,
+      accent: "from-violet-500 to-fuchsia-500",
+    },
+  ];
 
   return (
     <div className="mx-auto max-w-[1450px] space-y-6 pb-10">
-      <section className="relative overflow-hidden rounded-[32px] bg-[#071827] p-7 text-white shadow-2xl sm:p-9">
+      <section className="relative overflow-hidden rounded-[34px] bg-[#071827] p-7 text-white shadow-2xl sm:p-10">
         <div className="absolute -right-20 -top-24 h-72 w-72 rounded-full bg-cyan-400/20 blur-3xl" />
-        <div className="relative flex flex-wrap items-start justify-between gap-6">
-          <div className="max-w-3xl">
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1.5 text-xs font-semibold text-cyan-200">
-              <Sparkles size={14} />
-              AUTONOMOUS MEDIA BUYER
-            </div>
-            <h1 className="heading-font text-3xl font-bold sm:text-4xl">
-              ระบบเตรียมโฆษณาให้เสร็จ คุณเปิดเองใน Meta
-            </h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">
-              AI วิเคราะห์ เลือกคอนเทนต์ สร้าง Dark Post และ Campaign Tree
-              แบบ PAUSED อัตโนมัติ คุณกำหนดงบ วันที่ และกดเปิดโฆษณาเองเท่านั้น
-            </p>
+        <div className="relative max-w-4xl">
+          <div className="inline-flex items-center gap-2 rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1.5 text-xs font-semibold text-emerald-200">
+            <ShieldCheck size={14} />
+            READ-ONLY MARKETING ADVISOR
           </div>
-          <div className="rounded-2xl border border-emerald-300/20 bg-emerald-300/10 px-4 py-3">
-            <div className="flex items-center gap-3 text-emerald-200">
-              <ShieldCheck size={22} />
-              <div>
-                <p className="text-sm font-semibold">Safety Guard ทำงาน</p>
-                <p className="text-xs text-emerald-100/70">
-                  ไม่เปิด · ไม่ใช้เงิน · ไม่แก้งบ/วันที่
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {error && (
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
-          {error}
-        </div>
-      )}
-
-      <section className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-cyan-200 bg-cyan-50 p-5">
-        <div>
-          <h2 className="font-bold text-cyan-950">
-            Audience Targeting ของ Meta
-          </h2>
-          <p className="mt-1 text-sm text-cyan-800">
-            ใช้แผนอายุ เพศ จังหวัด Interest และ Audience ID ที่ยืนยันแล้ว
-            แก้เฉพาะ Ad Set ที่ PAUSED
+          <h1 className="heading-font mt-5 text-3xl font-bold sm:text-4xl">
+            80 Marketing AI วิเคราะห์และแนะนำ คุณเป็นผู้ทำโฆษณาใน Meta
+          </h1>
+          <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-300">
+            ระบบอ่านข้อมูลโพสต์ย้อนหลัง 75 วันและผลโฆษณาจาก Meta เพื่อช่วยคัดโพสต์
+            เตรียม Dark Post Preview แนะนำกลุ่มเป้าหมาย และบอกสิ่งที่ควรปรับปรุง
+            โดยจะไม่สร้างหรือแก้ไขโฆษณาใน Meta
           </p>
-          {repairMessage && (
-            <p className="mt-2 text-sm font-semibold text-emerald-700">
-              {repairMessage}
-            </p>
-          )}
         </div>
-        <button
-          type="button"
-          disabled={repairing}
-          onClick={() => void repairPausedTargeting()}
-          className="rounded-2xl bg-cyan-700 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-cyan-700/20 disabled:opacity-50"
-        >
-          {repairing ? "กำลังตรวจและซ่อม..." : "ตรวจและซ่อม Targeting ตอนนี้"}
-        </button>
       </section>
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {[
-          {
-            label: "Dark Post Campaign",
-            value: data?.summary.darkPostCampaigns ?? 0,
-            Icon: Megaphone,
-          },
-          {
-            label: "Dark Post Ads",
-            value: data?.summary.darkPostAds ?? 0,
-            Icon: Sparkles,
-          },
-          {
-            label: "PAUSED พร้อมเปิด",
-            value: data?.summary.pausedCampaigns ?? 0,
-            Icon: LockKeyhole,
-          },
-          {
-            label: "รายงาน",
-            value: data?.summary.reports ?? 0,
-            Icon: FileText,
-          },
-        ].map(({ label, value, Icon }) => (
-          <article
-            key={String(label)}
-            className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
-          >
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-slate-500">{String(label)}</p>
-              <div className="rounded-xl bg-cyan-50 p-2 text-cyan-700">
-                <Icon size={18} />
-              </div>
-            </div>
-            <p className="mt-4 text-3xl font-bold text-slate-950">
-              {Number(value).toLocaleString()}
+          ["วิเคราะห์แล้ว", state.analyzedPosts, "โพสต์ในฐานข้อมูล 75 วัน"],
+          ["แนะนำให้พิจารณา", state.recommendedPosts, "Existing Post หรือ Dark Post"],
+          ["คะแนนเฉลี่ย", state.averageScore, "คะแนนคัดกรอง ไม่ใช่คำรับรองยอดขาย"],
+          ["แคมเปญที่ติดตาม", state.campaignsTracked, "อ่านจาก Meta โดยไม่แก้ไข"],
+        ].map(([label, value, detail]) => (
+          <article key={String(label)} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="text-xs font-semibold text-slate-500">{label}</p>
+            <p className="mt-3 text-3xl font-bold text-slate-950">
+              {loading ? <LoaderCircle className="animate-spin text-cyan-600" size={26} /> : Number(value).toLocaleString("th-TH")}
             </p>
+            <p className="mt-2 text-[11px] text-slate-500">{detail}</p>
           </article>
         ))}
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[1.35fr_0.9fr]">
-        <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-          <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5">
-            <div>
-              <h2 className="text-lg font-bold text-slate-950">
-                Dark Post ใน Meta
-              </h2>
-              <p className="mt-1 text-xs text-slate-500">
-                Campaign Tree ที่ AI สร้างไว้แบบ PAUSED
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => void load()}
-              className="rounded-xl border border-slate-200 p-2.5 text-slate-500 hover:bg-slate-50"
-              aria-label="รีเฟรช"
-            >
-              <RefreshCw size={17} />
-            </button>
-          </div>
-          <div className="divide-y divide-slate-100">
-            {data?.darkPosts.slice(0, 8).map((campaign) => (
-              <article
-                key={campaign.campaignDraftId}
-                className="flex flex-wrap items-center justify-between gap-4 px-6 py-5"
-              >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="rounded-full bg-violet-50 px-2.5 py-1 text-[10px] font-bold text-violet-700">
-                      DARK POST
-                    </span>
-                    <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700">
-                      PAUSED
-                    </span>
-                  </div>
-                  <h3 className="mt-2 truncate font-semibold text-slate-900">
-                    {campaign.campaignName}
-                  </h3>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {campaign.pageName} · {campaign.productCategory} ·{" "}
-                    {campaign.completeAdCount}/{campaign.adCount} Ads ·{" "}
-                    {dateTime(campaign.createdInMetaAt)}
-                  </p>
-                </div>
-                <CheckCircle2 className="text-emerald-500" size={22} />
-              </article>
-            ))}
-            {!data?.darkPosts.length && (
-              <div className="px-6 py-12 text-center text-sm text-slate-500">
-                ยังไม่มี Dark Post Campaign ใน Meta
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-100 px-6 py-5">
-            <h2 className="text-lg font-bold text-slate-950">รายงานล่าสุด</h2>
-            <p className="mt-1 text-xs text-slate-500">
-              แสดงเฉพาะสิ่งที่เจ้าของควรรู้
-            </p>
-          </div>
-          <div className="divide-y divide-slate-100">
-            {data?.reports.slice(0, 6).map((report) => (
-              <article key={report.id} className="px-6 py-4">
-                <div className="flex items-center gap-2 text-[10px] font-bold text-blue-700">
-                  <FileText size={13} />
-                  รายงาน · {dateTime(report.createdAt)}
-                </div>
-                <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-700">
-                  {report.reason}
-                </p>
-              </article>
-            ))}
-          </div>
+      <section className="grid gap-5 lg:grid-cols-2">
+        {workspaces.map(({ title, description, href, icon: Icon, accent }) => (
           <Link
-            href="/marketing/decision-audit"
-            className="flex items-center justify-between border-t border-slate-100 px-6 py-4 text-sm font-semibold text-cyan-700 hover:bg-cyan-50"
+            key={href}
+            href={href}
+            className="group rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg"
           >
-            ดูรายงานและ Dark Post ทั้งหมด
-            <ArrowRight size={17} />
+            <div className="flex items-start gap-4">
+              <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${accent} text-white shadow-lg`}>
+                <Icon size={23} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h2 className="text-lg font-bold text-slate-950">{title}</h2>
+                <p className="mt-2 text-sm leading-6 text-slate-500">{description}</p>
+                <span className="mt-4 inline-flex items-center gap-2 text-xs font-bold text-cyan-700">
+                  เปิดดู <ArrowRight size={15} className="transition group-hover:translate-x-1" />
+                </span>
+              </div>
+            </div>
           </Link>
-        </div>
+        ))}
       </section>
 
-      <section className="rounded-3xl border border-cyan-200 bg-cyan-50 p-6">
-        <div className="grid gap-5 md:grid-cols-3">
-          {[
-            ["1", "AI วิเคราะห์และเลือกโพสต์"],
-            ["2", "AI สร้าง Dark Post ใน Meta แบบ PAUSED"],
-            ["3", "คุณกำหนดงบ วันที่ และเปิดเองใน Meta"],
-          ].map(([step, text]) => (
-            <div key={step} className="flex items-center gap-3">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-cyan-700 font-bold text-white">
-                {step}
-              </span>
-              <p className="text-sm font-semibold text-cyan-950">{text}</p>
-            </div>
-          ))}
-        </div>
+      <section className="flex gap-3 rounded-3xl border border-cyan-200 bg-cyan-50 p-5 text-sm leading-6 text-cyan-950">
+        <Sparkles className="mt-0.5 shrink-0 text-cyan-700" size={20} />
+        AI จะแนะนำสิ่งที่ควรทำพร้อมเหตุผล แต่การสร้างแคมเปญ แก้ไขแอด กำหนดงบ วันเวลา และการเปิดโฆษณา เป็นหน้าที่ของคุณใน Meta ทั้งหมด
       </section>
     </div>
   );

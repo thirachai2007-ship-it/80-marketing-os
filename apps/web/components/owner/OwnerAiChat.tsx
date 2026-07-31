@@ -118,7 +118,7 @@ export default function OwnerAiChat() {
         </div>
         <div className="flex items-center gap-2 rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-2 text-xs text-emerald-200">
           <ShieldCheck size={15} />
-          AI เตรียมงานได้ แต่ไม่เปิดแคมเปญหรือใช้เงิน
+          ที่ปรึกษาแบบ READ-ONLY · ไม่สร้างหรือแก้โฆษณาใน Meta
         </div>
       </header>
 

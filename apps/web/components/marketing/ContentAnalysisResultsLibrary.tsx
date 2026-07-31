@@ -67,6 +67,15 @@ type ResultItem = {
     darkPostReason: string | null;
     suggestedObjective: string | null;
     darkPostCopyCount: number;
+    darkPostCopies: Array<{
+      id: string;
+      angleName: string;
+      primaryText: string;
+      headline: string;
+      description: string | null;
+      callToAction: string;
+      version: number;
+    }>;
     modelName: string | null;
     updatedAt: string;
   };
@@ -626,7 +635,16 @@ export default function ContentAnalysisResultsLibrary() {
               >
                 <div className="grid gap-0 md:grid-cols-[180px_1fr]">
                   <div className="flex min-h-[180px] items-center justify-center bg-slate-100">
-                    {media ? (
+                    {media && item.content.mediaType.toLowerCase().includes("video") ? (
+                      <video
+                        src={item.content.mediaUrl ?? undefined}
+                        poster={item.content.thumbnailUrl ?? undefined}
+                        controls
+                        preload="metadata"
+                        playsInline
+                        className="h-full min-h-[180px] w-full bg-black object-contain"
+                      />
+                    ) : media ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={media}
@@ -858,7 +876,7 @@ export default function ContentAnalysisResultsLibrary() {
                             Audience Plan
                           </p>
                           {item.audience ? (
-                            <dl className="mt-3 space-y-2 text-[11px]">
+                            <dl className="mt-3 space-y-3 text-[11px]">
                               <div className="flex justify-between gap-3">
                                 <dt className="text-teal-700">
                                   Strategy
@@ -870,6 +888,22 @@ export default function ContentAnalysisResultsLibrary() {
                                       .strategy
                                   }
                                 </dd>
+                              </div>
+                              <div>
+                                <dt className="text-teal-700">จังหวัดแนะนำ</dt>
+                                <dd className="mt-1 font-bold leading-5 text-teal-950">
+                                  {textArray(item.audience.provinces, 8).join(", ") || "ยังไม่มีหลักฐานเพียงพอ"}
+                                </dd>
+                              </div>
+                              <div>
+                                <dt className="text-teal-700">ความสนใจแนะนำ</dt>
+                                <dd className="mt-1 font-bold leading-5 text-teal-950">
+                                  {textArray(item.audience.interests, 10).join(", ") || "แนะนำ Broad เพื่อเก็บข้อมูลก่อน"}
+                                </dd>
+                              </div>
+                              <div>
+                                <dt className="text-teal-700">เหตุผลกลุ่มเป้าหมาย</dt>
+                                <dd className="mt-1 leading-5 text-teal-950">{item.audience.rationale}</dd>
                               </div>
                               <div className="flex justify-between gap-3">
                                 <dt className="text-teal-700">
@@ -906,6 +940,27 @@ export default function ContentAnalysisResultsLibrary() {
                             <p className="mt-3 text-xs text-teal-700">
                               ยังไม่มี Audience Plan
                             </p>
+                          )}
+                        </div>
+
+                        <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4 lg:col-span-3">
+                          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-violet-700">
+                            Dark Post Preview — สำหรับนำไปสร้างโฆษณาเองใน Meta
+                          </p>
+                          {item.analysis.darkPostCopies.length > 0 ? (
+                            <div className="mt-3 grid gap-3 lg:grid-cols-3">
+                              {item.analysis.darkPostCopies.map((copy) => (
+                                <article key={copy.id} className="rounded-2xl bg-white p-4 shadow-sm">
+                                  <p className="text-[10px] font-bold text-violet-700">แบบที่ {copy.version} · {copy.angleName}</p>
+                                  <h4 className="mt-2 text-sm font-bold text-slate-950">{copy.headline}</h4>
+                                  <p className="mt-2 whitespace-pre-wrap text-[11px] leading-5 text-slate-600">{copy.primaryText}</p>
+                                  {copy.description && <p className="mt-2 text-[10px] text-slate-500">{copy.description}</p>}
+                                  <span className="mt-3 inline-flex rounded-lg bg-violet-600 px-3 py-1.5 text-[10px] font-bold text-white">{copy.callToAction}</span>
+                                </article>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="mt-3 text-xs text-violet-800">โพสต์นี้ยังไม่มีชุดข้อความ Dark Post จึงยังไม่พร้อมนำไปสร้างโฆษณา</p>
                           )}
                         </div>
                       </div>

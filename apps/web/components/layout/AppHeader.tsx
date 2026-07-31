@@ -17,16 +17,28 @@ const pageTitles: Record<
   }
 > = {
   "/": {
-    title: "Owner Command Center",
-    subtitle: "รายงานและ Dark Post ที่พร้อมให้คุณเปิดใน Meta",
+    title: "80 Marketing AI Advisor",
+    subtitle: "วิเคราะห์และให้คำแนะนำ โดยไม่สร้างหรือแก้ไขโฆษณาใน Meta",
   },
   "/marketing": {
     title: "Marketing AI",
     subtitle: "สร้างคอนเทนต์และแคมเปญด้วย AI",
   },
   "/marketing/ai-chat": {
-    title: "คุยกับ 80 AI",
+    title: "คุยกับ 80 Marketing AI",
     subtitle: "สั่งงานและปรึกษา Media Buyer AI พร้อมแนบภาพ วิดีโอ และเอกสาร",
+  },
+  "/marketing/content-intelligence/results": {
+    title: "โพสต์และ Dark Post ที่แนะนำ",
+    subtitle: "พรีวิวสื่อ ข้อความ จุดแข็ง จุดอ่อน และกลุ่มเป้าหมายสำหรับนำไปทำแอดเอง",
+  },
+  "/marketing/ad-health": {
+    title: "รายงานคุณภาพโฆษณา",
+    subtitle: "ติดตามทุกแคมเปญจาก Meta แบบอ่านอย่างเดียว",
+  },
+  "/marketing/content-plan": {
+    title: "แผนคอนเทนต์ 7 วัน",
+    subtitle: "งานใหม่ที่แต่ละเพจและสินค้าเตรียมเพิ่ม",
   },
   "/settings/meta": {
     title: "Meta Integration",

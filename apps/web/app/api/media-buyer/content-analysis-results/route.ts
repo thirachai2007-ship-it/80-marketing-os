@@ -224,6 +224,19 @@ export async function GET(
               rationale: true,
             },
           },
+          darkPostCopies: {
+            orderBy: { version: "asc" },
+            take: 3,
+            select: {
+              id: true,
+              angleName: true,
+              primaryText: true,
+              headline: true,
+              description: true,
+              callToAction: true,
+              version: true,
+            },
+          },
           _count: {
             select: {
               darkPostCopies: true,
@@ -377,6 +390,7 @@ export async function GET(
             darkPostCopyCount:
               analysis._count
                 .darkPostCopies,
+            darkPostCopies: analysis.darkPostCopies,
             modelName:
               analysis.modelName,
             updatedAt:
