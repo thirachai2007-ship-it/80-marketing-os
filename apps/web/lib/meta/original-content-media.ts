@@ -16,6 +16,46 @@ type MetaPostMedia = {
 };
 type MetaTargetMedia = { source?: string; images?: MetaImage[] };
 
+function decodeEmbeddedJsonString(value: string) {
+  try {
+    return JSON.parse(`"${value}"`) as string;
+  } catch {
+    return null;
+  }
+}
+
+export async function resolveFacebookAudioSource(permalinkUrl: string) {
+  if (!/^https:\/\/(?:www\.)?facebook\.com\//i.test(permalinkUrl)) return null;
+
+  const embedUrl = new URL("https://www.facebook.com/plugins/video.php");
+  embedUrl.searchParams.set("href", permalinkUrl);
+  embedUrl.searchParams.set("show_text", "false");
+
+  const response = await fetch(embedUrl, {
+    cache: "no-store",
+    headers: { "User-Agent": "Mozilla/5.0" },
+  }).catch(() => null);
+  if (!response?.ok) return null;
+
+  const html = await response.text();
+  const encodedAudioUrl = html.match(
+    /"audio":\[\{"url":"((?:\\.|[^"\\])+)"/,
+  )?.[1];
+  if (!encodedAudioUrl) return null;
+
+  const audioUrl = decodeEmbeddedJsonString(encodedAudioUrl);
+  if (!audioUrl) return null;
+
+  try {
+    const parsed = new URL(audioUrl);
+    return parsed.protocol === "https:" && parsed.hostname.endsWith("fbcdn.net")
+      ? audioUrl
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function resolveOriginalContentMedia(analysisId: string) {
   const analysis = await prisma.contentAnalysis.findUnique({
     where: { id: analysisId },
