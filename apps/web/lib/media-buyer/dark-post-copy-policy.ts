@@ -40,6 +40,57 @@ const VARIANTS = [
   },
 ] as const;
 
+const GENERIC_HEADLINES: Set<string> = new Set(VARIANTS.map((variant) => variant.headline));
+
+function inferSubject(text: string): string {
+  const normalized = text.toLowerCase();
+  if (/สติกเกอร์|ฉลาก|label|sticker/.test(normalized)) return "งานสติกเกอร์";
+  if (/ผ้ากันเปื้อน|apron/.test(normalized)) return "ผ้ากันเปื้อน";
+  if (/\bdtg\b|ดีทีจี/.test(normalized)) return "เสื้อพิมพ์ DTG";
+  if (/cotton|คอตตอน/.test(normalized)) return "เสื้อ Cotton พิมพ์ลาย";
+  if (/เสื้อ|พิมพ์ลาย|ไมโคร|กีฬา/.test(normalized)) return "เสื้อพิมพ์ลาย";
+  return "งานสั่งผลิต";
+}
+
+function extractOffer(text: string): string | null {
+  const compact = text.replace(/\s+/g, " ");
+  const patterns = [
+    /(?:เริ่ม(?:ต้น)?|ราคา(?:เริ่มต้น)?)[^\n.!?]{0,25}?\d[\d,.]*\s*(?:บาท|บ\.|-)/i,
+    /(?:ขั้นต่ำ|สั่งขั้นต่ำ)[^\n.!?]{0,20}?\d+\s*(?:ตัว|ชิ้น|แผ่น|ใบ)?/i,
+    /(?:ผลิต|จัดส่ง|ส่งงาน)[^\n.!?]{0,20}?\d+\s*วัน/i,
+    /(?:ส่งฟรี|ออกแบบฟรี|มีไซซ์)[^\n.!?]{0,28}/i,
+  ];
+  for (const pattern of patterns) {
+    const match = compact.match(pattern)?.[0]?.trim();
+    if (match) return match.replace(/[|•]+$/g, "").slice(0, 42);
+  }
+  return null;
+}
+
+function textHash(text: string): number {
+  let hash = 0;
+  for (const character of text) hash = ((hash * 31) + character.charCodeAt(0)) >>> 0;
+  return hash;
+}
+
+function buildContextualHeadlines(text: string): string[] {
+  const subject = inferSubject(text);
+  const offer = extractOffer(text);
+  const candidates = [
+    `${subject}สั่งทำให้ตรงกับงานของคุณ`,
+    `ดูผลงาน${subject}จริงก่อนสั่ง`,
+    `ขอราคา${subject}พร้อมคำแนะนำ`,
+    `เลือก${subject}ให้เหมาะกับการใช้งาน`,
+    `มีแบบแล้ว เริ่มทำ${subject}ได้เลย`,
+    `${subject}ที่คุยรายละเอียดได้ทุกจุด`,
+    `เปรียบเทียบแบบและวัสดุ${subject}ก่อนผลิต`,
+    `ให้ทีมงานช่วยวาง${subject}จากโจทย์ของคุณ`,
+  ];
+  if (offer) candidates.unshift(`${subject} · ${offer}`);
+  const offset = textHash(text) % candidates.length;
+  return Array.from({ length: candidates.length }, (_, index) => candidates[(index + offset) % candidates.length]);
+}
+
 export function ensureThreeDarkPostCopies(
   inputCopies: DarkPostCopyInput[],
   fallbackText: string,
@@ -49,6 +100,7 @@ export function ensureThreeDarkPostCopies(
     copies[0]?.primaryText.trim() ||
     fallbackText.trim() ||
     "รับผลิตงานพิมพ์สั่งทำตามความต้องการของคุณ";
+  const contextualHeadlines = buildContextualHeadlines(`${fallbackText}\n${baseText}`);
 
   for (const variant of VARIANTS) {
     if (copies.length >= 5) break;
@@ -61,6 +113,18 @@ export function ensureThreeDarkPostCopies(
       description: null,
       callToAction: "SEND_MESSAGE",
     });
+  }
+
+  const usedHeadlines = new Set<string>();
+  let contextualIndex = 0;
+  for (const copy of copies) {
+    const normalized = copy.headline.normalize("NFKC").trim().toLowerCase();
+    if (!copy.headline.trim() || GENERIC_HEADLINES.has(copy.headline.trim()) || usedHeadlines.has(normalized)) {
+      while (usedHeadlines.has(contextualHeadlines[contextualIndex % contextualHeadlines.length].toLowerCase())) contextualIndex += 1;
+      copy.headline = contextualHeadlines[contextualIndex % contextualHeadlines.length];
+      contextualIndex += 1;
+    }
+    usedHeadlines.add(copy.headline.normalize("NFKC").trim().toLowerCase());
   }
 
   return copies.slice(0, 5);

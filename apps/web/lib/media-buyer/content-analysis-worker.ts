@@ -1330,7 +1330,7 @@ function parseAnalysisOutput(
             copy.primaryText &&
             copy.headline,
         )
-        .slice(0, 3),
+        .slice(0, 5),
         stringValue(raw.summary),
       ),
   };
@@ -1367,6 +1367,7 @@ function buildSystemPrompt(): string {
     "REJECT ใช้เมื่อคุณภาพต่ำ ไม่ชัด ผิดสินค้า หรือเสี่ยงทำยอดขายไม่ดี",
     "ถ้าคะแนนรวมต่ำกว่า 80 โดยทั่วไปไม่ควรเลือกเข้า Campaign",
     "ห้ามอ้างว่ามีผลยอดขายจริงหากไม่มีข้อมูล",
+    "สร้าง darkPostCopies ให้ครบ 5 แบบ โดยแต่ละ headline ต้องแตกต่างกันและอ้างอิงสินค้า จุดขาย ราคา จำนวนขั้นต่ำ หรือบริบทเฉพาะของโพสต์นี้ ห้ามใช้พาดหัวสำเร็จรูปซ้ำกันทุกโพสต์",
     "ส่งกลับ JSON Object เท่านั้น ห้าม Markdown",
   ].join("\n");
 }
