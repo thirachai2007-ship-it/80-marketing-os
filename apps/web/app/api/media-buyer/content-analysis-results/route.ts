@@ -236,6 +236,7 @@ export async function GET(
             take: 5,
             select: {
               id: true,
+              angle: true,
               angleName: true,
               primaryText: true,
               headline: true,
@@ -400,7 +401,7 @@ export async function GET(
                 .darkPostCopies,
             darkPostCopies: ensureThreeDarkPostCopies(
               analysis.darkPostCopies.map((copy) => ({
-                angle: copy.angleName,
+                angle: copy.angle,
                 angleName: copy.angleName,
                 primaryText: copy.primaryText,
                 headline: copy.headline,
