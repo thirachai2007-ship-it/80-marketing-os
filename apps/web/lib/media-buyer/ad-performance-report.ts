@@ -66,8 +66,8 @@ export async function getAdPerformanceReport(days = 30) {
         creativeName: true,
         objectStoryId: true,
         effectiveObjectStoryId: true,
-        campaign: { select: { name: true, effectiveStatus: true } },
-        adSet: { select: { name: true, effectiveStatus: true } },
+        campaign: { select: { id: true, name: true, effectiveStatus: true } },
+        adSet: { select: { id: true, name: true, effectiveStatus: true } },
       },
     }).catch(() => []),
     prisma.metaAdInsight.findMany({
