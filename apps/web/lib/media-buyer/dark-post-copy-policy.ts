@@ -91,6 +91,57 @@ function buildContextualHeadlines(text: string): string[] {
   return Array.from({ length: candidates.length }, (_, index) => candidates[(index + offset) % candidates.length]);
 }
 
+function extractPostFacts(text: string): string[] {
+  const compact = text.replace(/\r/g, "\n");
+  const fragments = compact
+    .split(/\n+|(?<=[.!?])\s+|[|•]+/)
+    .map((part) => part.replace(/\s+/g, " ").trim())
+    .filter((part) => part.length >= 6 && part.length <= 110)
+    .filter((part) => /ราคา|เริ่ม|ขั้นต่ำ|ผลิต|จัดส่ง|ส่งฟรี|ออกแบบ|ผ้า|วัสดุ|สกรีน|พิมพ์|ไซซ์|สี|รับประกัน|จำนวน|บาท|วัน/i.test(part));
+  return Array.from(new Set(fragments.map((fact) => fact.toLowerCase())))
+    .map((normalized) => fragments.find((fact) => fact.toLowerCase() === normalized)!)
+    .slice(0, 5);
+}
+
+function buildContextualPrimaryTexts(text: string): Record<string, string> {
+  const source = text.replace(/\s+/g, " ").trim();
+  const subject = inferSubject(source);
+  const offer = extractOffer(source);
+  const facts = extractPostFacts(text);
+  const factLines = facts.length > 0
+    ? facts.map((fact) => `✓ ${fact}`).join("\n")
+    : `✓ ดูรายละเอียด${subject}จากผลงานในโพสต์นี้`;
+  const shortFacts = facts.slice(0, 3).map((fact) => `• ${fact}`).join("\n") || `• ส่งแบบและรายละเอียดงานมาให้ทีมงานประเมิน`;
+
+  return {
+    TRUST: [
+      `ก่อนสั่ง${subject} ตรวจรายละเอียดจากงานจริงให้ครบก่อน`,
+      factLines,
+      `ดูผลงานในโพสต์นี้ แล้วทักแชตเพื่อยืนยันแบบ วัสดุ ราคา และระยะผลิตกับทีมงานอีกครั้ง`,
+    ].join("\n\n"),
+    VALUE: [
+      offer ? `${offer} — ลองเทียบรายละเอียดให้เหมาะกับงานและงบของคุณ` : `${subject}แต่ละแบบเหมาะกับงบและการใช้งานไม่เหมือนกัน`,
+      shortFacts,
+      `ส่งแบบ จำนวน และวันที่ต้องใช้มาให้ทีมงานช่วยแนะนำทางเลือกก่อนตัดสินใจ`,
+    ].join("\n\n"),
+    ACTION: [
+      `กำลังหา${subject}สำหรับงานของคุณอยู่หรือเปล่า?`,
+      shortFacts,
+      `ส่งรูปแบบหรือไอเดียมาในแชต พร้อมจำนวนที่ต้องการ ทีมงานจะช่วยสรุปรายละเอียดที่ต้องเช็กให้`,
+    ].join("\n\n"),
+    PROBLEM_SOLUTION: [
+      `กังวลว่างาน${subject}จะไม่ตรงแบบ งบเกิน หรือเสร็จไม่ทันใช้งาน?`,
+      factLines,
+      `บอกโจทย์ งบประมาณ จำนวน และวันใช้งานทางแชต เพื่อเช็กทางเลือกที่เหมาะสมก่อนสั่ง`,
+    ].join("\n\n"),
+    PROOF: [
+      `อย่าเพิ่งเลือก${subject}จากราคาอย่างเดียว ลองดูรายละเอียดและผลงานจริงในโพสต์นี้ก่อน`,
+      shortFacts,
+      `หากต้องการงานใกล้เคียงตัวอย่าง ส่งแบบมาคุยรายละเอียด ราคา และระยะเวลาผลิตได้โดยไม่มีข้อผูกมัด`,
+    ].join("\n\n"),
+  };
+}
+
 export function ensureThreeDarkPostCopies(
   inputCopies: DarkPostCopyInput[],
   fallbackText: string,
@@ -101,6 +152,7 @@ export function ensureThreeDarkPostCopies(
     fallbackText.trim() ||
     "รับผลิตงานพิมพ์สั่งทำตามความต้องการของคุณ";
   const contextualHeadlines = buildContextualHeadlines(`${fallbackText}\n${baseText}`);
+  const contextualPrimaryTexts = buildContextualPrimaryTexts(`${fallbackText}\n${baseText}`);
 
   for (const variant of VARIANTS) {
     if (copies.length >= 5) break;
@@ -119,7 +171,11 @@ export function ensureThreeDarkPostCopies(
   let contextualIndex = 0;
   for (const copy of copies) {
     const normalized = copy.headline.normalize("NFKC").trim().toLowerCase();
-    if (!copy.headline.trim() || GENERIC_HEADLINES.has(copy.headline.trim()) || usedHeadlines.has(normalized)) {
+    const usedGenericFallback = GENERIC_HEADLINES.has(copy.headline.trim());
+    if (usedGenericFallback && contextualPrimaryTexts[copy.angle]) {
+      copy.primaryText = contextualPrimaryTexts[copy.angle];
+    }
+    if (!copy.headline.trim() || usedGenericFallback || usedHeadlines.has(normalized)) {
       while (usedHeadlines.has(contextualHeadlines[contextualIndex % contextualHeadlines.length].toLowerCase())) contextualIndex += 1;
       copy.headline = contextualHeadlines[contextualIndex % contextualHeadlines.length];
       contextualIndex += 1;
