@@ -22,7 +22,7 @@ export async function getProductCampaignCoverage() {
   }));
   const eligible = coverage.filter((item) => item.suitable);
   const gaps = eligible.filter((item) => !item.covered);
-  return { coverageVersion: PRODUCT_CAMPAIGN_COVERAGE_VERSION, contentWindowDays: 45, policyCount: coverage.length, eligibleProductCount: eligible.length, coveredProductCount: eligible.length - gaps.length, gapCount: gaps.length, coverage, gaps, safety: { ownerApprovalRequired: true, campaignPublished: false, metaMutationExecuted: false, realSpendUsed: false, budgetChanged: false } };
+  return { coverageVersion: PRODUCT_CAMPAIGN_COVERAGE_VERSION, contentWindowDays: 75, policyCount: coverage.length, eligibleProductCount: eligible.length, coveredProductCount: eligible.length - gaps.length, gapCount: gaps.length, coverage, gaps, safety: { ownerApprovalRequired: true, campaignPublished: false, metaMutationExecuted: false, realSpendUsed: false, budgetChanged: false } };
 }
 
 export async function enforceProductCampaignCoverage() {

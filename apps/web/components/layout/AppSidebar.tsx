@@ -2,11 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 
 import {
   Bot,
   Boxes,
   BrainCircuit,
+  BarChart3,
+  CalendarClock,
   ChevronRight,
   MessageCircleMore,
   ShieldCheck,
@@ -35,17 +38,17 @@ const menuGroups: MenuGroup[] = [
     title: "OWNER",
     items: [
       {
-        title: "Owner Command Center",
+        title: "ภาพรวมที่ปรึกษา AI",
         href: "/",
         icon: ShieldCheck,
       },
       {
-        title: "Reports & Dark Posts",
-        href: "/marketing/decision-audit",
+        title: "โพสต์และ Dark Post",
+        href: "/marketing/content-intelligence/results",
         icon: ScrollText,
       },
       {
-        title: "คุยกับ 80 AI",
+        title: "คุยกับ 80 Marketing AI",
         href: "/marketing/ai-chat",
         icon: MessageCircleMore,
       },
@@ -55,7 +58,17 @@ const menuGroups: MenuGroup[] = [
     title: "OPERATIONS",
     items: [
       {
-        title: "Content Analysis",
+        title: "รายงานคุณภาพโฆษณา",
+        href: "/marketing/ad-health",
+        icon: BarChart3,
+      },
+      {
+        title: "แผนคอนเทนต์ 7 วัน",
+        href: "/marketing/content-plan",
+        icon: CalendarClock,
+      },
+      {
+        title: "สถานะวิเคราะห์ 75 วัน",
         href: "/marketing/content-intelligence",
         icon: BrainCircuit,
       },
@@ -84,6 +97,19 @@ function isMenuActive(pathname: string, href?: string) {
 
 export default function AppSidebar() {
   const pathname = usePathname();
+  const [pendingNavigation, setPendingNavigation] = useState<{
+    href: string;
+    fromPathname: string;
+  } | null>(null);
+  const resolvedActiveHref = menuGroups
+    .flatMap((group) => group.items)
+    .filter((item) => isMenuActive(pathname, item.href))
+    .map((item) => item.href)
+    .filter((href): href is string => Boolean(href))
+    .sort((a, b) => b.length - a.length)[0];
+  const activeHref = pendingNavigation?.fromPathname === pathname
+    ? pendingNavigation.href
+    : resolvedActiveHref;
 
   return (
     <aside className="app-sidebar flex h-screen w-[260px] shrink-0 flex-col overflow-hidden border-r border-slate-800/80">
@@ -125,7 +151,7 @@ export default function AppSidebar() {
             <div className="space-y-1">
               {group.items.map((item) => {
                 const Icon = item.icon;
-                const active = isMenuActive(pathname, item.href);
+                const active = item.href === activeHref;
 
                 const content = (
                   <>
@@ -181,6 +207,7 @@ export default function AppSidebar() {
                   <Link
                     key={item.title}
                     href={item.href}
+                    onClick={() => item.href && setPendingNavigation({ href: item.href, fromPathname: pathname })}
                     className={[
                       "group relative flex h-11 w-full items-center justify-between overflow-hidden rounded-xl px-2.5 outline-none transition-all",
                       active
@@ -188,10 +215,6 @@ export default function AppSidebar() {
                         : "text-slate-300 hover:bg-white/[0.065] hover:text-white",
                     ].join(" ")}
                   >
-                    {active && (
-                      <span className="absolute inset-y-2 left-0 w-[3px] rounded-r-full bg-white/90" />
-                    )}
-
                     {content}
                   </Link>
                 );
@@ -213,14 +236,14 @@ export default function AppSidebar() {
               <div>
                 <div className="flex items-center gap-2">
                   <p className="text-xs font-semibold text-white">
-                    AI Engine
+                  AI Advisor
                   </p>
 
                   <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
                 </div>
 
                 <p className="mt-1 text-[10px] text-slate-400">
-                  Online and ready
+                  Read-only and ready
                 </p>
               </div>
             </div>

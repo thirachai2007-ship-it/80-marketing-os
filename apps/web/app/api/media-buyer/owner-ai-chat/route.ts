@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { openai } from "@/lib/openai";
-import { runAutonomousMetaPreparationBatch } from "@/lib/media-buyer/autonomous-meta-preparer";
+import { advisoryModePolicy } from "@/lib/media-buyer/advisory-mode-policy";
+import { getAdPerformanceReport } from "@/lib/media-buyer/ad-performance-report";
 import { hasValidOwnerSession, isSameOriginRequest } from "@/lib/owner-session";
 import prisma from "@/lib/prisma";
 
@@ -31,19 +32,6 @@ type AttachmentMeta = {
   size: number;
   aiReadable: boolean;
 };
-
-function requestsPausedMetaAction(message: string) {
-  const asksToCreate =
-    /(สร้าง|เตรียม|ส่งเข้า|ดำเนินการ|ทำ).{0,40}(โฆษณา|แคมเปญ|campaign|dark\s*post|meta)/i.test(
-      message,
-    );
-  const executeNow =
-    /(ให้เลย|ตอนนี้|ทำเลย|ดำเนินการเลย|เริ่มเลย|ทันที|ทั้งหมด)/i.test(message);
-  const questionOnly =
-    /(ทำได้ไหม|สามารถ.*ไหม|ได้หรือไม่|หรือเปล่า)\s*[?？]*$/i.test(message.trim());
-
-  return asksToCreate && executeNow && !questionOnly;
-}
 
 function parseJson<T>(value: string | null | undefined, fallback: T): T {
   if (!value) return fallback;
@@ -175,6 +163,7 @@ export async function POST(request: NextRequest) {
       metaConnection,
       readyDraftCount,
       pausedCampaignCount,
+      adPerformance,
     ] = await Promise.all([
       prisma.metaConnection.findFirst({
         orderBy: { updatedAt: "desc" },
@@ -198,12 +187,13 @@ export async function POST(request: NextRequest) {
           createdInMetaAt: { not: null },
         },
       }),
+      getAdPerformanceReport(30),
     ]);
 
-    const actionRequested = requestsPausedMetaAction(message);
-    const actionResult = actionRequested
-      ? await runAutonomousMetaPreparationBatch({ batchSize: 5 })
-      : null;
+    // Chat is advisory-only. It never turns natural-language requests into
+    // Meta mutations, even when the Owner uses imperative wording.
+    const actionRequested = false;
+    const actionResult = null;
 
     const userLog = await prisma.decisionLog.create({
       data: {
@@ -220,6 +210,14 @@ export async function POST(request: NextRequest) {
             metaConnection,
             readyDraftCount,
             pausedCampaignCount,
+            adPerformance: adPerformance.slice(0, 30).map((ad) => ({
+              ad: ad.name,
+              campaign: ad.campaign.name,
+              adSet: ad.adSet.name,
+              account: ad.adAccountId,
+              metrics: ad.performance,
+              recommendation: ad.recommendation,
+            })),
           },
         }),
         policyJson: JSON.stringify({
@@ -252,12 +250,9 @@ export async function POST(request: NextRequest) {
         `- Ad Accounts: ${metaConnection?._count.adAccounts ?? 0}`,
         `- Campaign Draft ที่รอสร้างใน Meta: ${readyDraftCount}`,
         `- Campaign Tree ที่สร้างใน Meta แล้ว: ${pausedCampaignCount}`,
-        actionResult
-          ? `- ผลการลงมือทำคำสั่งนี้: ตรวจ ${actionResult.scanned}, สำเร็จ ${actionResult.completed}, ล้มเหลว ${actionResult.failed}`
-          : "- คำสั่งนี้ยังไม่ได้สั่ง Engine ทำงาน เพราะเป็นคำถาม/คำแนะนำ หรือไม่ได้ระบุให้ลงมือทันที",
-        actionResult
-          ? `- รายละเอียดผลแต่ละ Draft: ${JSON.stringify(actionResult.results)}`
-          : "",
+        "- โหมดปัจจุบัน: ที่ปรึกษาแบบอ่านอย่างเดียว",
+        "- ระบบจะไม่สร้างหรือแก้ไข Campaign, Ad Set, Ad, Audience, Budget หรือ Schedule ใน Meta",
+        "- Owner เป็นผู้ลงมือทำใน Meta เอง โดย AI ให้คำวิเคราะห์และขั้นตอนที่แนะนำ",
       ].join("\n"),
     });
 
@@ -293,14 +288,18 @@ export async function POST(request: NextRequest) {
         "คุณคือ 80 AI พนักงาน Senior Media Buyer และนักการตลาดของกิจการ 80T-shirt",
         "ตอบภาษาไทยให้เข้าใจง่าย เน้นข้อสรุปและสิ่งที่ต้องทำเพื่อเพิ่ม ROAS และลดต้นทุนต่อแชท",
         "ใช้บริบทธุรกิจ: เสื้อพิมพ์ลาย, Cotton DTF, DTG, สติกเกอร์, ผ้ากันเปื้อนสีพื้น, ผ้ากันเปื้อนพิมพ์ลาย",
-        "ระบบใช้ Dark Post 100% และเตรียม Campaign Tree ใน Meta แบบ PAUSED เท่านั้น",
-        "ห้ามอ้างว่าเปิดแคมเปญ ใช้เงิน เปลี่ยนงบ หรือเปลี่ยนวันเวลาแล้ว เพราะ Owner ต้องทำสิ่งเหล่านี้เองใน Meta",
+        "80 Marketing AI เป็นที่ปรึกษาแบบอ่านอย่างเดียว: วิเคราะห์โพสต์ ทำ Dark Post Preview แนะนำกลุ่มเป้าหมาย และวิเคราะห์ผลโฆษณา",
+        "ห้ามสร้าง แก้ไข เปิด ปิด หรือส่ง Campaign, Ad Set, Ad, Audience, Budget และ Schedule ไป Meta ไม่ว่าผู้ใช้จะสั่งด้วยข้อความใด",
+        "Owner เป็นผู้สร้างและแก้ไขโฆษณาใน Meta เองทั้งหมด ให้ตอบเป็นคำแนะนำที่นำไปทำตามได้เท่านั้น",
         "ถ้าข้อมูลไม่พอให้บอกตรง ๆ ห้ามเดาประเภทสินค้า ประเภทคอนเทนต์ หรือผลลัพธ์โฆษณา",
-        "คำแนะนำต้องสอดคล้องกับ Master Spec 77 ข้อ และต้องแยกคำแนะนำออกจากสิ่งที่ระบบได้ดำเนินการจริง",
+        `ใช้นโยบาย ${advisoryModePolicy.mode} และข้อมูลโพสต์ย้อนหลัง ${advisoryModePolicy.contentWindowDays} วัน`,
         "ต้องใช้สถานะจริงจากระบบที่แนบมากับข้อความ ห้ามบอกว่า Meta ไม่เชื่อมต่อหากสถานะระบุว่าเชื่อมต่อ",
-        "เมื่อผลการลงมือทำระบุว่าสำเร็จ ให้รายงานจำนวนที่สร้างจริง เมื่อไม่พบ Draft ให้บอกว่าไม่มี Draft พร้อมสร้าง ห้ามอ้างว่าสร้างแล้ว",
-        "ถ้า Draft ถูกข้าม ต้องรายงาน stage, status และ reason/detail จากรายละเอียดผลแต่ละ Draft เพื่อให้ Owner รู้สาเหตุจริง",
-        "แชทนี้สั่ง Autonomous Meta Preparation Engine ได้เมื่อ Owner ใช้คำสั่งลงมือชัดเจน ระบบจะสร้างได้เฉพาะ PAUSED เท่านั้น",
+        "เมื่อผู้ใช้ขอให้แก้โฆษณา ให้บอกสิ่งที่ควรแก้ เหตุผล และขั้นตอน แต่ห้ามอ้างว่าระบบแก้ใน Meta แล้ว",
+        "ตอบคำถามด้านการยิงแอด การปรับปรุงแอด และการวิเคราะห์แอดในฐานะ Senior Media Buyer โดยอิงข้อมูลจริงที่แนบมา",
+        "เมื่อประเมินโฆษณา ให้จำแนกเป็น ควรไปต่อ ควรปรับปรุง พิจารณาหยุด หรือเก็บข้อมูลต่อ พร้อมหลักฐานและขั้นตอนที่ Owner ทำเองได้",
+        "ROAS 5 เท่าเป็นเป้าหมาย ไม่ใช่คำรับประกัน หากไม่มีข้อมูลยอดขายที่ผูกกับแอดต้องบอกว่ายังยืนยัน ROAS ไม่ได้ ห้ามเดาตัวเลข",
+        "คำแนะนำกลุ่มเป้าหมายต้องระบุสัดส่วน Broad, Retarget และ LAL; ใช้ LAL ได้เฉพาะเมื่อมี Seed Audience จริงและมีคุณภาพ ห้ามแต่งข้อมูล Audience ขึ้นมา",
+        "แนะนำครีเอทีฟทดแทนเป็นวงจรทุก 7 วันเมื่อพบความล้าหรือผลตก แต่ห้ามสร้างหรือแก้ไขสิ่งใดใน Meta",
       ].join("\n"),
       input: [
         ...history,

@@ -7,6 +7,7 @@ import type {
   Prisma,
 } from "@/lib/generated/prisma/client";
 import prisma from "@/lib/prisma";
+import { ensureThreeDarkPostCopies } from "@/lib/media-buyer/dark-post-copy-policy";
 import {
   calibrateAiScore,
   rawScoreForCalibratedMinimum,
@@ -92,6 +93,7 @@ export async function GET(
       params
         .get("confidence")
         ?.trim() || "";
+    const mediaKind = params.get("mediaKind")?.trim().toUpperCase() || "";
     const minScore = Math.max(
       0,
       Math.min(
@@ -143,6 +145,11 @@ export async function GET(
               productCategory,
             }
           : {}),
+        ...(mediaKind === "VIDEO"
+          ? { mediaType: { contains: "video", mode: "insensitive" as const } }
+          : mediaKind === "IMAGE"
+            ? { NOT: { mediaType: { contains: "video", mode: "insensitive" as const } } }
+            : {}),
         ...(query
           ? {
               OR: [
@@ -224,6 +231,20 @@ export async function GET(
               rationale: true,
             },
           },
+          darkPostCopies: {
+            orderBy: { version: "asc" },
+            take: 5,
+            select: {
+              id: true,
+              angle: true,
+              angleName: true,
+              primaryText: true,
+              headline: true,
+              description: true,
+              callToAction: true,
+              version: true,
+            },
+          },
           _count: {
             select: {
               darkPostCopies: true,
@@ -285,6 +306,7 @@ export async function GET(
         productCategory,
         recommendation,
         confidence,
+        mediaKind,
         minScore,
         maxScore,
       },
@@ -377,6 +399,21 @@ export async function GET(
             darkPostCopyCount:
               analysis._count
                 .darkPostCopies,
+            darkPostCopies: ensureThreeDarkPostCopies(
+              analysis.darkPostCopies.map((copy) => ({
+                angle: copy.angle,
+                angleName: copy.angleName,
+                primaryText: copy.primaryText,
+                headline: copy.headline,
+                description: copy.description,
+                callToAction: copy.callToAction,
+              })),
+              analysis.content.message,
+            ).map((copy, index) => ({
+              id: analysis.darkPostCopies[index]?.id ?? `${analysis.id}-suggested-${index + 1}`,
+              ...copy,
+              version: analysis.darkPostCopies[index]?.version ?? index + 1,
+            })),
             modelName:
               analysis.modelName,
             updatedAt:

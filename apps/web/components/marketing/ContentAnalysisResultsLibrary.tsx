@@ -5,6 +5,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
@@ -12,14 +13,48 @@ import {
   ArrowRight,
   BrainCircuit,
   CheckCircle2,
+  ClipboardCopy,
+  Download,
   ExternalLink,
   Filter,
   ImageIcon,
+  Maximize2,
   RefreshCcw,
   Search,
   ShieldCheck,
   TriangleAlert,
+  X,
 } from "lucide-react";
+
+function ResilientPreviewImage({ sources, alt }: { sources: Array<string | null | undefined>; alt: string }) {
+  const candidates = Array.from(new Set(sources.filter((source): source is string => Boolean(source))));
+  const [sourceIndex, setSourceIndex] = useState(0);
+
+  if (!candidates[sourceIndex]) {
+    return <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-black px-4 text-center text-xs text-slate-400"><ImageIcon size={32}/><span>ไม่สามารถโหลดภาพพรีวิวได้</span></div>;
+  }
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={candidates[sourceIndex]}
+      alt={alt}
+      onError={() => setSourceIndex((current) => current + 1)}
+      className="h-full w-full bg-black object-contain"
+    />
+  );
+}
+
+function targetingMix(strategy: string, confidence: string) {
+  const normalized = `${strategy} ${confidence}`.toUpperCase();
+  if (normalized.includes("LOOKALIKE") || normalized.includes("LAL")) {
+    return { broad: 55, retarget: 25, lal: 20, note: "ใช้ LAL ได้ต่อเมื่อมี Seed Audience จริงและมีคุณภาพเพียงพอ" };
+  }
+  if (normalized.includes("HIGH")) {
+    return { broad: 60, retarget: 25, lal: 15, note: "LAL เป็นตัวเลือกแบบมีเงื่อนไข ต้องตรวจ Seed Audience ก่อนใช้" };
+  }
+  return { broad: 75, retarget: 25, lal: 0, note: "ยังไม่มีหลักฐาน Seed Audience เพียงพอ จึงไม่สร้าง LAL ขึ้นมาเอง" };
+}
 
 type PageOption = {
   id: string;
@@ -67,6 +102,15 @@ type ResultItem = {
     darkPostReason: string | null;
     suggestedObjective: string | null;
     darkPostCopyCount: number;
+    darkPostCopies: Array<{
+      id: string;
+      angleName: string;
+      primaryText: string;
+      headline: string;
+      description: string | null;
+      callToAction: string;
+      version: number;
+    }>;
     modelName: string | null;
     updatedAt: string;
   };
@@ -205,8 +249,6 @@ export default function ContentAnalysisResultsLibrary() {
     useState("");
   const [queryInput, setQueryInput] =
     useState("");
-  const [query, setQuery] =
-    useState("");
   const [pageId, setPageId] =
     useState("");
   const [
@@ -219,49 +261,98 @@ export default function ContentAnalysisResultsLibrary() {
   ] = useState("");
   const [minScore, setMinScore] =
     useState("0");
+  const [mediaKind, setMediaKind] = useState("");
+  const [appliedFilters, setAppliedFilters] = useState({
+    query: "",
+    pageId: "",
+    productCategory: "",
+    recommendation: "",
+    minScore: "0",
+    mediaKind: "",
+  });
   const [page, setPage] =
     useState(1);
   const [expandedId, setExpandedId] =
     useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [mediaPreview, setMediaPreview] = useState<{
+    src: string;
+    poster: string | null;
+    isVideo: boolean;
+    title: string;
+    permalinkUrl: string | null;
+    downloadUrl: string;
+  } | null>(null);
+  const [fitMedia, setFitMedia] = useState(false);
+  const previewVideoRef = useRef<HTMLVideoElement | null>(null);
+  const [soundEnabled, setSoundEnabled] = useState(false);
+  const latestRequestRef = useRef(0);
+
+  const enablePreviewSound = useCallback(() => {
+    const video = previewVideoRef.current;
+    if (!video) return;
+    video.muted = false;
+    video.volume = 1;
+    void video.play();
+    setSoundEnabled(true);
+  }, []);
+
+  const copyAdText = useCallback(async (id: string, text: string) => {
+    await navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    window.setTimeout(() => setCopiedId((current) => current === id ? null : current), 1800);
+  }, []);
+
+  useEffect(() => {
+    if (!mediaPreview) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMediaPreview(null);
+    };
+    document.addEventListener("keydown", closeOnEscape);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", closeOnEscape);
+      document.body.style.overflow = "";
+    };
+  }, [mediaPreview]);
 
   const requestUrl = useMemo(() => {
     const params =
       new URLSearchParams({
         page: String(page),
         pageSize: "20",
-        minScore,
+        minScore: appliedFilters.minScore,
       });
 
-    if (query) {
-      params.set("query", query);
+    if (appliedFilters.query) {
+      params.set("query", appliedFilters.query);
     }
-    if (pageId) {
-      params.set("pageId", pageId);
+    if (appliedFilters.pageId) {
+      params.set("pageId", appliedFilters.pageId);
     }
-    if (productCategory) {
+    if (appliedFilters.productCategory) {
       params.set(
         "productCategory",
-        productCategory,
+        appliedFilters.productCategory,
       );
     }
-    if (recommendation) {
+    if (appliedFilters.recommendation) {
       params.set(
         "recommendation",
-        recommendation,
+        appliedFilters.recommendation,
       );
     }
+    if (appliedFilters.mediaKind) params.set("mediaKind", appliedFilters.mediaKind);
 
     return `/api/media-buyer/content-analysis-results?${params.toString()}`;
   }, [
-    minScore,
+    appliedFilters,
     page,
-    pageId,
-    productCategory,
-    query,
-    recommendation,
   ]);
 
   const load = useCallback(async () => {
+    const requestId = latestRequestRef.current + 1;
+    latestRequestRef.current = requestId;
     setLoading(true);
     setError("");
 
@@ -282,15 +373,15 @@ export default function ContentAnalysisResultsLibrary() {
         );
       }
 
-      setData(result);
+      if (latestRequestRef.current === requestId) setData(result);
     } catch (loadError) {
-      setError(
+      if (latestRequestRef.current === requestId) setError(
         loadError instanceof Error
           ? loadError.message
           : "เกิดข้อผิดพลาด",
       );
     } finally {
-      setLoading(false);
+      if (latestRequestRef.current === requestId) setLoading(false);
     }
   }, [requestUrl]);
 
@@ -302,18 +393,24 @@ export default function ContentAnalysisResultsLibrary() {
 
   function applySearch() {
     setPage(1);
-    setQuery(
-      queryInput.trim(),
-    );
+    setAppliedFilters({
+      query: queryInput.trim(),
+      pageId,
+      productCategory,
+      recommendation,
+      minScore,
+      mediaKind,
+    });
   }
 
   function resetFilters() {
     setQueryInput("");
-    setQuery("");
     setPageId("");
     setProductCategory("");
     setRecommendation("");
     setMinScore("0");
+    setMediaKind("");
+    setAppliedFilters({ query: "", pageId: "", productCategory: "", recommendation: "", minScore: "0", mediaKind: "" });
     setPage(1);
   }
 
@@ -477,7 +574,6 @@ export default function ContentAnalysisResultsLibrary() {
           <select
             value={pageId}
             onChange={(event) => {
-              setPage(1);
               setPageId(
                 event.target.value,
               );
@@ -500,9 +596,20 @@ export default function ContentAnalysisResultsLibrary() {
           </select>
 
           <select
+            value={mediaKind}
+            onChange={(event) => {
+              setMediaKind(event.target.value);
+            }}
+            className="h-11 rounded-2xl border border-slate-200 bg-white px-3 text-xs text-slate-700 outline-none focus:border-teal-400"
+          >
+            <option value="">สื่อทั้งหมด</option>
+            <option value="VIDEO">วิดีโอเท่านั้น</option>
+            <option value="IMAGE">ภาพนิ่งเท่านั้น</option>
+          </select>
+
+          <select
             value={productCategory}
             onChange={(event) => {
-              setPage(1);
               setProductCategory(
                 event.target.value,
               );
@@ -524,7 +631,6 @@ export default function ContentAnalysisResultsLibrary() {
           <select
             value={recommendation}
             onChange={(event) => {
-              setPage(1);
               setRecommendation(
                 event.target.value,
               );
@@ -546,7 +652,6 @@ export default function ContentAnalysisResultsLibrary() {
           <select
             value={minScore}
             onChange={(event) => {
-              setPage(1);
               setMinScore(
                 event.target.value,
               );
@@ -607,8 +712,13 @@ export default function ContentAnalysisResultsLibrary() {
               item.content
                 .thumbnailUrl ||
               item.content.mediaUrl;
+            const fullMedia = item.content.mediaUrl || media;
+            const isVideo = item.content.mediaType.toLowerCase().includes("video");
             const expanded =
               expandedId === item.id;
+            const mix = item.audience
+              ? targetingMix(item.audience.strategy, item.analysis.confidence)
+              : null;
             const reasons =
               textArray(
                 item.analysis.reasons,
@@ -618,20 +728,39 @@ export default function ContentAnalysisResultsLibrary() {
                 item.analysis.weaknesses,
                 6,
               );
+            const copyOptions = item.analysis.darkPostCopies.slice(0, 5);
+            const readyToCopy = copyOptions.length
+              ? copyOptions.map((copy, index) => `ข้อความหลัก ${index + 1}\n${copy.primaryText}\n\nพาดหัว ${index + 1}\n${copy.headline}`).join("\n\n--------------------\n\n")
+              : item.content.message;
+            const originalMedia = `/api/media-buyer/content-analysis-results/${item.id}/original-media`;
 
             return (
               <article
                 key={item.id}
                 className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm"
               >
-                <div className="grid gap-0 md:grid-cols-[180px_1fr]">
-                  <div className="flex min-h-[180px] items-center justify-center bg-slate-100">
-                    {media ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={media}
-                        alt=""
-                        className="h-full min-h-[180px] w-full object-cover"
+                <div className="grid gap-0 md:grid-cols-[260px_1fr]">
+                  <div className="flex items-start justify-center bg-slate-950 p-3 md:self-start md:rounded-br-[24px]">
+                    <button
+                      type="button"
+                      disabled={!fullMedia}
+                      onClick={() => fullMedia && (setFitMedia(false), setSoundEnabled(false), setMediaPreview({ src: originalMedia, poster: item.content.thumbnailUrl, isVideo, title: item.content.pageName, permalinkUrl: item.content.permalinkUrl, downloadUrl: `/api/media-buyer/content-analysis-results/${item.id}/download` }))}
+                      className="group relative aspect-[9/16] w-full max-w-[230px] overflow-hidden rounded-[24px] border border-white/10 bg-black shadow-xl disabled:cursor-default"
+                      title="เปิดดูไฟล์ต้นฉบับขนาดใหญ่"
+                    >
+                    {media && isVideo ? (
+                      <video
+                        src={item.content.mediaUrl ?? undefined}
+                        poster={item.content.thumbnailUrl ?? undefined}
+                        preload="metadata"
+                        playsInline
+                        muted
+                        className="h-full w-full bg-black object-contain"
+                      />
+                    ) : media ? (
+                      <ResilientPreviewImage
+                        sources={[originalMedia, item.content.mediaUrl, item.content.thumbnailUrl]}
+                        alt={`ภาพโพสต์จาก ${item.content.pageName}`}
                       />
                     ) : (
                       <ImageIcon
@@ -639,6 +768,8 @@ export default function ContentAnalysisResultsLibrary() {
                         className="text-slate-300"
                       />
                     )}
+                    {fullMedia && <span className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-black/70 text-white backdrop-blur transition group-hover:scale-110"><Maximize2 size={17}/></span>}
+                    </button>
                   </div>
 
                   <div className="p-5">
@@ -711,8 +842,47 @@ export default function ContentAnalysisResultsLibrary() {
                             />
                           </a>
                         )}
+                        {(item.content.mediaUrl || item.content.thumbnailUrl) && (
+                          <a
+                            href={`/api/media-buyer/content-analysis-results/${item.id}/download`}
+                            className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:border-teal-300 hover:text-teal-700"
+                            title="ดาวน์โหลดภาพหรือวิดีโอต้นฉบับ"
+                          >
+                            <Download size={16} />
+                          </a>
+                        )}
                       </div>
                     </div>
+
+                    {readyToCopy && expanded && (
+                      <div className="mt-4 rounded-2xl border border-violet-200 bg-violet-50 p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-violet-700">ข้อความพร้อมใช้ยิงแอด</p>
+                            <p className="mt-1 text-[10px] text-violet-600">คัดลอกแล้วนำไปวางใน Meta Ads Manager ได้เลย</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => copyAdText(item.id, readyToCopy)}
+                            className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-violet-600 px-3 py-2 text-xs font-bold text-white hover:bg-violet-700"
+                          >
+                            <ClipboardCopy size={14} />
+                            {copiedId === item.id ? "คัดลอกแล้ว" : "คัดลอกข้อความ"}
+                          </button>
+                        </div>
+                        <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                          {copyOptions.map((copy, index) => (
+                            <div key={copy.id} className="rounded-xl border border-violet-100 bg-white p-3">
+                              <p className="text-[10px] font-bold text-violet-700">ข้อความหลัก {index + 1}</p>
+                              <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-slate-700">{copy.primaryText}</p>
+                              <p className="mt-3 text-[10px] font-bold text-violet-700">พาดหัว {index + 1}</p>
+                              <p className="mt-1 text-sm font-bold text-slate-900">{copy.headline}</p>
+                              <button type="button" onClick={() => copyAdText(`${item.id}-${index}`, `${copy.primaryText}\n\n${copy.headline}`)} className="mt-3 inline-flex items-center gap-1 text-[10px] font-bold text-violet-700"><ClipboardCopy size={12}/>{copiedId === `${item.id}-${index}` ? "คัดลอกแล้ว" : "คัดลอกชุดนี้"}</button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-slate-100">
                       <div
@@ -858,7 +1028,7 @@ export default function ContentAnalysisResultsLibrary() {
                             Audience Plan
                           </p>
                           {item.audience ? (
-                            <dl className="mt-3 space-y-2 text-[11px]">
+                            <dl className="mt-3 space-y-3 text-[11px]">
                               <div className="flex justify-between gap-3">
                                 <dt className="text-teal-700">
                                   Strategy
@@ -870,6 +1040,36 @@ export default function ContentAnalysisResultsLibrary() {
                                       .strategy
                                   }
                                 </dd>
+                              </div>
+                              {mix && (
+                                <div>
+                                  <dt className="text-teal-700">สัดส่วนงบทดสอบกลุ่มเป้าหมายที่แนะนำ</dt>
+                                  <dd className="mt-2 grid grid-cols-3 gap-2 text-center font-bold text-teal-950">
+                                    <span className="rounded-xl bg-white p-2">Broad {mix.broad}%</span>
+                                    <span className="rounded-xl bg-white p-2">Retarget {mix.retarget}%</span>
+                                    <span className="rounded-xl bg-white p-2">LAL {mix.lal}%</span>
+                                  </dd>
+                                  <p className="mt-2 text-[10px] leading-4 text-teal-700">{mix.note}</p>
+                                  <p className="mt-1 text-[10px] leading-4 text-teal-700">
+                                    คิดจากงบรวม 100% ไม่ใช่สัดส่วนจำนวนคน และใช้ Retarget/LAL เฉพาะเมื่อมีฐานข้อมูลจริงเพียงพอ
+                                  </p>
+                                </div>
+                              )}
+                              <div>
+                                <dt className="text-teal-700">จังหวัดแนะนำ</dt>
+                                <dd className="mt-1 font-bold leading-5 text-teal-950">
+                                  {textArray(item.audience.provinces, 8).join(", ") || "ยังไม่มีหลักฐานเพียงพอ"}
+                                </dd>
+                              </div>
+                              <div>
+                                <dt className="text-teal-700">ความสนใจแนะนำ</dt>
+                                <dd className="mt-1 font-bold leading-5 text-teal-950">
+                                  {textArray(item.audience.interests, 10).join(", ") || "แนะนำ Broad เพื่อเก็บข้อมูลก่อน"}
+                                </dd>
+                              </div>
+                              <div>
+                                <dt className="text-teal-700">เหตุผลกลุ่มเป้าหมาย</dt>
+                                <dd className="mt-1 leading-5 text-teal-950">{item.audience.rationale}</dd>
                               </div>
                               <div className="flex justify-between gap-3">
                                 <dt className="text-teal-700">
@@ -906,6 +1106,27 @@ export default function ContentAnalysisResultsLibrary() {
                             <p className="mt-3 text-xs text-teal-700">
                               ยังไม่มี Audience Plan
                             </p>
+                          )}
+                        </div>
+
+                        <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4 lg:col-span-3">
+                          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-violet-700">
+                            Dark Post Preview — สำหรับนำไปสร้างโฆษณาเองใน Meta
+                          </p>
+                          {item.analysis.darkPostCopies.length > 0 ? (
+                            <div className="mt-3 grid gap-3 lg:grid-cols-3">
+                              {item.analysis.darkPostCopies.map((copy) => (
+                                <article key={copy.id} className="rounded-2xl bg-white p-4 shadow-sm">
+                                  <p className="text-[10px] font-bold text-violet-700">แบบที่ {copy.version} · {copy.angleName}</p>
+                                  <h4 className="mt-2 text-sm font-bold text-slate-950">{copy.headline}</h4>
+                                  <p className="mt-2 whitespace-pre-wrap text-[11px] leading-5 text-slate-600">{copy.primaryText}</p>
+                                  {copy.description && <p className="mt-2 text-[10px] text-slate-500">{copy.description}</p>}
+                                  <span className="mt-3 inline-flex rounded-lg bg-violet-600 px-3 py-1.5 text-[10px] font-bold text-white">{copy.callToAction}</span>
+                                </article>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="mt-3 text-xs text-violet-800">โพสต์นี้ยังไม่มีชุดข้อความ Dark Post จึงยังไม่พร้อมนำไปสร้างโฆษณา</p>
                           )}
                         </div>
                       </div>
@@ -981,6 +1202,42 @@ export default function ContentAnalysisResultsLibrary() {
         <ShieldCheck size={18} />
         หน้านี้อ่านข้อมูลอย่างเดียว ไม่เรียก AI ไม่เปลี่ยน Queue และไม่สร้างหรือเผยแพร่โฆษณา
       </div>
+
+      {mediaPreview && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 p-3 backdrop-blur-sm sm:p-8"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`พรีวิว ${mediaPreview.title}`}
+          onClick={() => setMediaPreview(null)}
+        >
+          <div className="absolute left-4 right-16 top-4 z-10 flex flex-wrap gap-2">
+            <button type="button" onClick={(event) => { event.stopPropagation(); setFitMedia(false); }} className={`rounded-full px-4 py-2 text-xs font-bold shadow-xl ${!fitMedia ? "bg-cyan-500 text-white" : "bg-white text-slate-900"}`}>ขนาดจริง 100%</button>
+            <button type="button" onClick={(event) => { event.stopPropagation(); setFitMedia(true); }} className={`rounded-full px-4 py-2 text-xs font-bold shadow-xl ${fitMedia ? "bg-cyan-500 text-white" : "bg-white text-slate-900"}`}>พอดีหน้าจอ</button>
+            {mediaPreview.isVideo && !mediaPreview.permalinkUrl && <button type="button" onClick={(event) => { event.stopPropagation(); enablePreviewSound(); }} className={`rounded-full px-4 py-2 text-xs font-bold shadow-xl ${soundEnabled ? "bg-emerald-500 text-white" : "bg-white text-slate-900"}`}>{soundEnabled ? "เปิดเสียงแล้ว 100%" : "เปิดเสียง"}</button>}
+            <a href={mediaPreview.downloadUrl} onClick={(event) => event.stopPropagation()} className="inline-flex items-center gap-2 rounded-full bg-violet-600 px-4 py-2 text-xs font-bold text-white shadow-xl hover:bg-violet-700"><Download size={14}/>ดาวน์โหลดไฟล์</a>
+            {mediaPreview.isVideo && mediaPreview.permalinkUrl && <a href={mediaPreview.permalinkUrl} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()} className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-xs font-bold text-slate-900 shadow-xl"><ExternalLink size={14}/>เปิดโพสต์ต้นฉบับ</a>}
+          </div>
+          <button type="button" onClick={() => setMediaPreview(null)} className="absolute right-4 top-4 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white text-slate-950 shadow-xl" aria-label="ปิดพรีวิว"><X size={22}/></button>
+          <div className={`h-full w-full overflow-auto ${fitMedia ? "flex items-center justify-center" : "block text-center"}`} onClick={(event) => event.stopPropagation()}>
+            {mediaPreview.isVideo && mediaPreview.permalinkUrl ? (
+              <iframe
+                title={`วิดีโอต้นฉบับ ${mediaPreview.title}`}
+                src={`https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(mediaPreview.permalinkUrl)}&show_text=false&autoplay=false`}
+                allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
+                allowFullScreen
+                className={fitMedia ? "h-full max-h-[90vh] w-full max-w-[520px] border-0 bg-black shadow-2xl" : "inline-block h-[90vh] w-[50.625vh] max-w-[90vw] border-0 bg-black shadow-2xl"}
+              />
+            ) : mediaPreview.isVideo ? (
+              <video ref={previewVideoRef} src={mediaPreview.src} poster={mediaPreview.poster ?? undefined} controls playsInline preload="metadata" onVolumeChange={(event) => setSoundEnabled(!event.currentTarget.muted && event.currentTarget.volume > 0)} className={fitMedia ? "max-h-full max-w-full bg-black object-contain shadow-2xl" : "inline-block h-auto max-w-none bg-black shadow-2xl"} />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={mediaPreview.src} alt={mediaPreview.title} className={fitMedia ? "max-h-full max-w-full object-contain shadow-2xl" : "inline-block h-auto max-w-none shadow-2xl"} />
+            )}
+          </div>
+          <div className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-black/70 px-4 py-2 text-center text-xs text-white">แสดงไฟล์ต้นฉบับ · คลิกพื้นที่ว่างหรือกด Esc เพื่อปิด</div>
+        </div>
+      )}
     </div>
   );
 }
