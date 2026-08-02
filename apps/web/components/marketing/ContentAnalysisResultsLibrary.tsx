@@ -26,6 +26,25 @@ import {
   X,
 } from "lucide-react";
 
+function ResilientPreviewImage({ sources, alt }: { sources: Array<string | null | undefined>; alt: string }) {
+  const candidates = Array.from(new Set(sources.filter((source): source is string => Boolean(source))));
+  const [sourceIndex, setSourceIndex] = useState(0);
+
+  if (!candidates[sourceIndex]) {
+    return <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-black px-4 text-center text-xs text-slate-400"><ImageIcon size={32}/><span>ไม่สามารถโหลดภาพพรีวิวได้</span></div>;
+  }
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={candidates[sourceIndex]}
+      alt={alt}
+      onError={() => setSourceIndex((current) => current + 1)}
+      className="h-full w-full bg-black object-contain"
+    />
+  );
+}
+
 function targetingMix(strategy: string, confidence: string) {
   const normalized = `${strategy} ${confidence}`.toUpperCase();
   if (normalized.includes("LOOKALIKE") || normalized.includes("LAL")) {
@@ -739,11 +758,9 @@ export default function ContentAnalysisResultsLibrary() {
                         className="h-full w-full bg-black object-contain"
                       />
                     ) : media ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={media}
-                        alt=""
-                        className="h-full w-full bg-black object-contain"
+                      <ResilientPreviewImage
+                        sources={[originalMedia, item.content.mediaUrl, item.content.thumbnailUrl]}
+                        alt={`ภาพโพสต์จาก ${item.content.pageName}`}
                       />
                     ) : (
                       <ImageIcon
